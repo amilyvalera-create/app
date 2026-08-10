@@ -1,0 +1,150 @@
+{
+  "app_name": "Lista de Precios VENEGE",
+  "personality": "Fusion: 6 Glass / Luxe DARK structural surfaces + 7 Dark-First Utility DARK for data density and typography.",
+  "personality_one_liner": "A high-end, stop-scroll enterprise pricing command center combining rugged automotive undertones with luxury glassmorphism and aggressive condensed typography.",
+  "color": {
+    "surface": "#0C0C10",
+    "onSurface": "#F4F4F6",
+    "surfaceSecondary": "#15161C",
+    "onSurfaceSecondary": "#D8D8E0",
+    "surfaceTertiary": "#1E1F29",
+    "onSurfaceTertiary": "#A0A0B0",
+    "surfaceInverse": "#EAEAEF",
+    "onSurfaceInverse": "#0C0C10",
+    "brand": "#A32A32",
+    "brandPrimary": "#E11D2A",
+    "onBrandPrimary": "#FFFFFF",
+    "brandSecondary": "#E0552F",
+    "onBrandSecondary": "#FFFFFF",
+    "brandTertiary": "#451619",
+    "onBrandTertiary": "#F0B6B9",
+    "success": "#1E4620",
+    "onSuccess": "#A3E6A8",
+    "warning": "#5C3E08",
+    "onWarning": "#F5C875",
+    "error": "#5A1116",
+    "onError": "#F2A2A8",
+    "info": "#0F3D4D",
+    "onInfo": "#92DDF5",
+    "border": "#282933",
+    "borderStrong": "#424454",
+    "divider": "#1E1F29"
+  },
+  "typography": {
+    "displayFontFamily": "BebasNeue-Regular",
+    "textFontFamily": "Inter-Medium",
+    "scale": {
+      "sm": 12,
+      "base": 14,
+      "lg": 16,
+      "xl": 20,
+      "2xl": 24,
+      "3xl": 32
+    }
+  },
+  "spacing": {
+    "rule": "Use strict 8pt grid. Generous outer margins (24px) for mobile, clamping at max-width 900px for desktop-web centering. Dense padding inside price cards (12px) to maximize data visibility.",
+    "xs": 4,
+    "sm": 8,
+    "md": 12,
+    "lg": 16,
+    "xl": 24,
+    "2xl": 32,
+    "3xl": 48
+  },
+  "radius_tokens": {
+    "sm": 6,
+    "md": 12,
+    "lg": 20,
+    "pill": 999
+  },
+  "shadow_tier": "1",
+  "navigation": "stack_only",
+  "icon_set": "Phosphor",
+  "glassmorphism": {
+    "enabled": true,
+    "do's": [
+      "Use heavy tinted glass (>= 80% opacity of surfaceSecondary) for sticky search headers and bottom action bars.",
+      "Apply glass effects on the Login form card over the hero background.",
+      "Use blur behind the 'recent searches' dropdown or sticky filters."
+    ],
+    "dont's": [
+      "Never use glass on the dense product pricing cards themselves (use solid surfaceSecondary to maintain data readability).",
+      "Do not blur standard inputs or body content."
+    ]
+  },
+  "platform_libraries": {
+    "glass": {
+      "ios": "expo-glass-effect",
+      "android": "expo-blur",
+      "low_end_android_fallback": "solid surfaceSecondary"
+    },
+    "image": "expo-image",
+    "blur": "expo-blur",
+    "bottom_sheet": "@gorhom/bottom-sheet",
+    "animation": "react-native-reanimated",
+    "gesture": "react-native-gesture-handler"
+  },
+  "screens": [
+    {
+      "name": "Login",
+      "purpose": "Premium authenticated entry point that sets the brand's luxury automotive tone.",
+      "states": {
+        "loading": "Spinner overlaid on the login button; fields disabled.",
+        "empty": "N/A",
+        "error": "Soft red warning banner above the inputs (e.g., 'Credenciales incorrectas')."
+      },
+      "layout": "Full-bleed hero image background (dark rugged tire). A vertical gradient scrim (transparent to 90% surface base) sits behind a glassmorphic login card. Centered layout on desktop (max-width: 400px card). Brand logo at the top. Large, 56pt high inputs. Primary CTA is brandPrimary (crimson) with a subtle vertical gradient. Spanish labels."
+    },
+    {
+      "name": "Search Home",
+      "purpose": "The main command center for fast, typo-tolerant SKU/Marca lookups.",
+      "states": {
+        "loading": "Skeleton loaders for the 'recent searches' list.",
+        "empty": "No recent searches: subtle Phosphor search icon + 'No hay búsquedas recientes'.",
+        "error": "Network error banner + retry button."
+      },
+      "layout": "Desktop-optimized: Content centered with a max-width of 800px. A massive, prominent search bar (56pt height, 20pt text) dominates the top area. Below, a compact section for 'Últimas 6 búsquedas' rendered as pill chips. Actions: A 'Refresh' button (Master sync shortcut) and a placeholder 'Consultar inventario' button for Phase 2."
+    },
+    {
+      "name": "Product Result",
+      "purpose": "Displays authorized pricing data instantly and clearly based on the user's role.",
+      "states": {
+        "loading": "Card skeletons showing the structure of SKU and price rows.",
+        "empty": "Premium empty state: Large Phosphor Box icon, 'No se encontraron neumáticos', and a 'Nueva consulta' button.",
+        "error": "'No disponible' state for missing prices within the card layout itself."
+      },
+      "layout": "Desktop-optimized: Multi-column grid (2-col or 3-col depending on screen width) for product cards. Mobile: Single column. Each card is solid surfaceSecondary with borderStrong. Layout inside card: Header with SKU (Bebas Neue) and MARCA. Body with DESCRIPCIÓN and RIN. Bottom half dedicated to Price columns (Precio 1/2/3). Sticky bottom bar containing 'Buscar otro' and 'Nueva consulta' primary actions, using glassmorphism."
+    },
+    {
+      "name": "Master Panel",
+      "purpose": "Admin dashboard for managing data sync and viewing global query stats.",
+      "states": {
+        "loading": "Full screen centered spinner during manual data refresh.",
+        "empty": "No recent activity yet.",
+        "error": "Sync failed banner with exact Excel parsing error + Retry button."
+      },
+      "layout": "Sidebar navigation on desktop, stack on mobile. Top section: Last sync timestamp (large display type) and a massive 'Actualizar Datos' button (brandSecondary orange). Middle section: Stat cards showing 'Últimas 6 búsquedas globales'. Bottom: Recent activity logs. Strong separation of admin controls from regular user search."
+    }
+  ],
+  "images": {
+    "login_hero": {
+      "url": "https://images.pexels.com/photos/10673700/pexels-photo-10673700.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "dark": "https://images.pexels.com/photos/10673700/pexels-photo-10673700.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "alt": "Dark moody vintage car wheel serving as a luxury automotive backdrop"
+    },
+    "empty_state_illustration": {
+      "url": "https://images.pexels.com/photos/15392185/pexels-photo-15392185.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "dark": "https://images.pexels.com/photos/15392185/pexels-photo-15392185.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "alt": "Stacked racing tires in the dark"
+    }
+  },
+  "instructions_to_main_agent": [
+    "CRITICAL: The target environment includes desktop web (react-native-web). At the root of the Search Home, Product Result, and Master Panel screens, implement a centering wrapper with a max-width (e.g., 900px) and width: '100%'. Use Flexbox wrap for the Product Results cards so they form a multi-column grid on desktop.",
+    "Typography Rule: Use the requested BebasNeue font for headings (SKU names, app titles, sync stats) and Inter for all body content, labels, and price numbers. Do not use @expo-google-fonts; assume fonts will be loaded locally via expo-font from assets.",
+    "Brand Colors: Ensure all gradients strictly use the brandPrimary (#E11D2A) to brandSecondary (#E0552F) spectrum. Do not mix unrelated hues. Use the dark surface colors (#0C0C10 base, #15161C cards) to create the 'stop-scroll' luxury contrast.",
+    "Visual Hierarchy: The Search Bar on 'Search Home' must be oversized (minimum 56px height) to indicate it is the primary interaction point. Use large touch targets globally.",
+    "Data Privacy: The Product Result screen must dynamically hide price rows based on the user's role. If a price is null/missing, explicitly render an elegant 'No disponible' text instead of an empty space.",
+    "Use a strict vertical gradient scrim on the Login screen behind the login form to ensure perfect text readability against the dark tire background image."
+  ]
+}
