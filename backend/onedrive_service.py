@@ -65,6 +65,7 @@ def _to_number(value):
 class OneDriveService:
     def __init__(self):
         self.worksheet = os.environ.get("MS_WORKSHEET", WORKSHEET)
+        self.table = os.environ.get("MS_TABLE", "_202606_Precios")
         self.share_url = os.environ.get("ONEDRIVE_SHARE_URL", DEFAULT_SHARE_URL)
 
     def is_configured(self) -> bool:
@@ -88,7 +89,7 @@ class OneDriveService:
         }
         r = await client.post(url, data=data)
         if r.status_code != 200:
-            raise RuntimeError(f"token_failed: {r.status_code}")
+            raise RuntimeError(f"token_failed: {r.status_code}: {r.text[:300]}")
         return r.json()["access_token"]
 
     async def _download(self, client: httpx.AsyncClient, token: str) -> bytes:
@@ -96,49 +97,73 @@ class OneDriveService:
         headers = {"Authorization": f"Bearer {token}"}
         item = await client.get(f"{GRAPH}/shares/{sid}/driveItem", headers=headers)
         if item.status_code != 200:
-            raise RuntimeError(f"share_resolution_failed: {item.status_code}")
+            raise RuntimeError(f"share_resolution_failed: {item.status_code}: {item.text[:300]}")
         content = await client.get(f"{GRAPH}/shares/{sid}/driveItem/content", headers=headers)
         if content.status_code != 200:
-            raise RuntimeError(f"download_failed: {content.status_code}")
+            raise RuntimeError(f"download_failed: {content.status_code}: {content.text[:300]}")
         return content.content
 
+    def _map_row(self, row, id_idx, price_idx):
+        def cell(i):
+            return row[i] if i is not None and i < len(row) else None
+
+        sku_raw = cell(id_idx["sku"])
+        if sku_raw is None or str(sku_raw).strip() == "":
+            return None
+        rin_raw = cell(id_idx["rin"])
+        try:
+            rin = int(float(rin_raw)) if rin_raw not in (None, "") else 0
+        except (ValueError, TypeError):
+            rin = str(rin_raw).strip()
+        prices = {key: _to_number(cell(i)) for key, i in price_idx}
+        return {
+            "sku": str(sku_raw).strip(),
+            "rin": rin,
+            "marca": str(cell(id_idx["marca"]) or "").strip(),
+            "descripcion": str(cell(id_idx["descripcion"]) or "").strip(),
+            "prices": prices,
+        }
+
     def _parse(self, content: bytes):
-        wb = load_workbook(io.BytesIO(content), read_only=True, data_only=True)
+        # Non read-only so table metadata is available (openpyxl skips tables in
+        # read_only mode). Price lists are small, so this is fine.
+        wb = load_workbook(io.BytesIO(content), read_only=False, data_only=True)
         try:
             if self.worksheet not in wb.sheetnames:
                 raise RuntimeError(f"worksheet_not_found:{self.worksheet}")
             ws = wb[self.worksheet]
-            rows = list(ws.iter_rows(values_only=True))
-            if len(rows) < 2:
-                return []
 
             id_idx = {field: col_letter_to_index(letter) for letter, field in IDENTITY_COLUMNS.items()}
             price_idx = [(c["key"], col_letter_to_index(c["letter"])) for c in PRICE_COLUMNS]
 
+            # Prefer the named Excel table over a raw range.
+            data_start = 2  # default: assume header on row 1
+            data_end = ws.max_row
+            tables = getattr(ws, "tables", {}) or {}
+            table_obj = None
+            if hasattr(tables, "items"):
+                for name, t in tables.items():
+                    if str(name).replace(" ", "") == self.table.replace(" ", ""):
+                        table_obj = t
+                        break
+                if table_obj is None and len(tables):
+                    table_obj = next(iter(tables.values()))
+            if table_obj is not None and getattr(table_obj, "ref", None):
+                import re
+                start, end = table_obj.ref.split(":")
+                sr = int(re.match(r"[A-Z]+(\d+)", start).group(1))
+                er = int(re.match(r"[A-Z]+(\d+)", end).group(1))
+                data_start = sr + 1  # skip table header row
+                data_end = er
+                logger.info("Reading table %s range %s", self.table, table_obj.ref)
+
             products = []
-            for row in rows[1:]:
+            for row in ws.iter_rows(min_row=data_start, max_row=data_end, values_only=True):
                 if row is None:
                     continue
-
-                def cell(i):
-                    return row[i] if i < len(row) else None
-
-                sku_raw = cell(id_idx["sku"])
-                if sku_raw is None or str(sku_raw).strip() == "":
-                    continue
-                rin_raw = cell(id_idx["rin"])
-                try:
-                    rin = int(float(rin_raw)) if rin_raw not in (None, "") else 0
-                except (ValueError, TypeError):
-                    rin = str(rin_raw).strip()
-                prices = {key: _to_number(cell(i)) for key, i in price_idx}
-                products.append({
-                    "sku": str(sku_raw).strip(),
-                    "rin": rin,
-                    "marca": str(cell(id_idx["marca"]) or "").strip(),
-                    "descripcion": str(cell(id_idx["descripcion"]) or "").strip(),
-                    "prices": prices,
-                })
+                mapped = self._map_row(row, id_idx, price_idx)
+                if mapped is not None:
+                    products.append(mapped)
             return products
         finally:
             wb.close()

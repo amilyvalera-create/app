@@ -120,7 +120,10 @@ export const api = {
       last_sync: string | null;
       source: string;
       worksheet: string;
+      table: string;
       connection_ready: boolean;
+      credentials_set: boolean;
+      last_error: string | null;
       missing_setup: string[];
       auto_refresh_per_day: number;
       recent_global_searches: HistoryItem[];

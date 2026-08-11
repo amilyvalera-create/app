@@ -48,6 +48,22 @@ All user-facing text in Spanish.
 - UX: quick filters (RIN + MARCA chip rows), per-user favorites (pin/unpin), WhatsApp
   share quotation with VENEGE branding, refined transparent logo mark (no box).
 
+## LIVE CONNECTION STATUS (2026-08-11)
+- OAuth token: ✅ works (tenant e98f980c…, client fc11a183…, real secret VALUE).
+- Workbook read: ❌ blocked by Microsoft with `400 BadRequest: "Tenant does not have a
+  SPO license."` The share resolves to `onedrive.live.com/personal/…` → the file lives on a
+  PERSONAL (consumer) OneDrive, which an app-only (client-credentials) token for a business
+  tenant cannot read. App-only Graph reads require the file on the tenant's OneDrive for
+  Business / SharePoint (tenant must have a SharePoint Online license).
+- Resolution options (user action on Microsoft side; NO app changes needed):
+  1. Upload "Maestro Precios N.xlsx" to the corporate OneDrive for Business in tenant
+     e98f980c… (tenant needs a SharePoint/OneDrive for Business license), re-share, update
+     ONEDRIVE_SHARE_URL → live read works immediately.
+  2. OR keep it on personal OneDrive but switch to a delegated OAuth flow with that consumer
+     account (interactive sign-in) — different auth model.
+- Meanwhile the app serves schema-accurate reference data; the master panel shows the exact
+  Spanish reason and connection_ready=false (honest status).
+
 ## PENDING SETUP (single item) to go LIVE
 Set these backend secrets (Deployment → Secrets), then master taps "Actualizar datos":
   MS_TENANT_ID, MS_CLIENT_ID, MS_CLIENT_SECRET  (Entra app registration, Files.Read.All +

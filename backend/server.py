@@ -373,18 +373,33 @@ async def refresh_view(user: CurrentUser = Depends(get_current_user)):
     }
 
 
-@api_router.post("/admin/sync")
-async def admin_sync(user: CurrentUser = Depends(require_master)):
-    """Master-only full source synchronization. Reads live OneDrive worksheet
-    "Precios Actual" when configured; otherwise reseeds schema-accurate mock."""
+async def _run_sync():
+    """Perform a live/mock sync and record connection health in meta.
+    Returns the sync result dict. Raises on live connection failure."""
     try:
         result = await onedrive.sync(db, build_mock_products, normalize)
-    except Exception:
-        raise HTTPException(
-            status_code=502,
-            detail="No pudimos sincronizar con OneDrive. Verifica la conexión e intenta de nuevo.",
+    except Exception as e:
+        reason = str(e)
+        if "invalid_client" in reason or "AADSTS7000215" in reason:
+            msg = "No pudimos autenticar con Microsoft. Verifica MS_CLIENT_SECRET (usa el VALOR del secreto, no el ID)."
+        elif "SPO license" in reason or "BadRequest" in reason:
+            msg = ("El libro está en un OneDrive personal o el tenant no tiene licencia de SharePoint / "
+                   "OneDrive for Business. Sube 'Maestro Precios N.xlsx' al OneDrive corporativo del tenant "
+                   "para habilitar la lectura en vivo.")
+        elif "AADSTS65001" in reason or ": 403" in reason:
+            msg = "Falta el consentimiento de administrador para el permiso Files.Read.All en Azure."
+        elif "worksheet_not_found" in reason:
+            msg = "No encontramos la hoja 'Precios Actual' en el libro."
+        else:
+            msg = "No pudimos leer el libro de OneDrive. Verifica la conexión de Microsoft."
+        await db.meta.update_one(
+            {"_id": "sync"},
+            {"$set": {"live_ok": False, "last_error": msg}},
+            upsert=True,
         )
+        raise
     now = datetime.now(timezone.utc).isoformat()
+    live_ok = result["source"].startswith("onedrive")
     await db.meta.update_one(
         {"_id": "sync"},
         {"$set": {
@@ -392,10 +407,27 @@ async def admin_sync(user: CurrentUser = Depends(require_master)):
             "source": result["source"],
             "row_count": result["row_count"],
             "schema_version": SCHEMA_VERSION,
+            "live_ok": live_ok,
+            "last_error": None,
         }},
         upsert=True,
     )
-    return {"ok": True, "last_sync": now, **result}
+    return {"last_sync": now, **result}
+
+
+@api_router.post("/admin/sync")
+async def admin_sync(user: CurrentUser = Depends(require_master)):
+    """Master-only full source synchronization. Reads live OneDrive worksheet
+    "Precios Actual" (table _202606_Precios) when configured; otherwise reseeds
+    the schema-accurate mock."""
+    try:
+        result = await _run_sync()
+    except Exception:
+        raise HTTPException(
+            status_code=502,
+            detail="No pudimos sincronizar con OneDrive. Verifica la conexión e intenta de nuevo.",
+        )
+    return {"ok": True, **result}
 
 
 @api_router.get("/admin/dashboard")
@@ -404,14 +436,19 @@ async def admin_dashboard(user: CurrentUser = Depends(require_master)):
     meta = await db.meta.find_one({"_id": "sync"}, {"_id": 0}) or {}
     feed = await db.global_activity.find_one({"_id": "feed"}, {"_id": 0, "items": 1}) or {}
     global_items = feed.get("items", [])
+    credentials_set = onedrive.is_configured()
+    live_ok = bool(meta.get("live_ok"))
     return {
         "product_count": count,
         "last_sync": meta.get("last_sync"),
         "source": meta.get("source", "mock"),
         "worksheet": onedrive.worksheet,
-        "connection_ready": onedrive.is_configured(),
+        "table": onedrive.table,
+        "connection_ready": live_ok,
+        "credentials_set": credentials_set,
+        "last_error": meta.get("last_error"),
         "missing_setup": onedrive.missing_setup(),
-        "auto_refresh_per_day": 3 if onedrive.is_configured() else 0,
+        "auto_refresh_per_day": 3 if credentials_set else 0,
         "recent_global_searches": global_items[:6],
         "activity": global_items[:12],
         "total_users": await db.users.count_documents({}),
@@ -494,6 +531,17 @@ async def seed():
 
     # Kick off the automatic source refresh loop (only acts when configured).
     asyncio.create_task(_auto_refresh_loop())
+    # One-time live sync attempt at startup so the panel reflects real status.
+    if onedrive.is_configured():
+        asyncio.create_task(_startup_sync())
+
+
+async def _startup_sync():
+    try:
+        result = await _run_sync()
+        logger.info("Startup live sync: %d rows from %s", result["row_count"], result["source"])
+    except Exception as e:
+        logger.warning("Startup live sync failed (check MS_CLIENT_SECRET value): %s", e)
 
 
 async def _auto_refresh_loop():
@@ -504,17 +552,7 @@ async def _auto_refresh_loop():
         if not onedrive.is_configured():
             continue
         try:
-            result = await onedrive.sync(db, build_mock_products, normalize)
-            await db.meta.update_one(
-                {"_id": "sync"},
-                {"$set": {
-                    "last_sync": datetime.now(timezone.utc).isoformat(),
-                    "source": result["source"],
-                    "row_count": result["row_count"],
-                    "schema_version": SCHEMA_VERSION,
-                }},
-                upsert=True,
-            )
+            result = await _run_sync()
             logger.info("Auto-refresh synced %d rows from %s", result["row_count"], result["source"])
         except Exception as e:
             logger.warning("Auto-refresh failed, will retry next cycle: %s", e)

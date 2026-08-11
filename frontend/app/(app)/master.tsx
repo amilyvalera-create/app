@@ -85,10 +85,13 @@ export default function Master() {
             <View style={styles.notice} testID="setup-notice">
               <Ionicons name="cloud-offline-outline" size={20} color={colors.onWarning} />
               <View style={{ flex: 1 }}>
-                <Text style={styles.noticeTitle}>Conexión OneDrive pendiente</Text>
+                <Text style={styles.noticeTitle}>
+                  {data.credentials_set ? "Revisa la conexión de Microsoft" : "Conexión OneDrive pendiente"}
+                </Text>
                 <Text style={styles.noticeBody}>
-                  Mostrando datos de referencia. Conecta la cuenta corporativa de Microsoft para leer la hoja
-                  “Precios Actual” en vivo (requiere MS_TENANT_ID, MS_CLIENT_ID y MS_CLIENT_SECRET).
+                  {data.last_error
+                    ? data.last_error
+                    : "Mostrando datos de referencia. Conecta la cuenta corporativa de Microsoft para leer la hoja “Precios Actual” en vivo (requiere MS_TENANT_ID, MS_CLIENT_ID y MS_CLIENT_SECRET)."}
                 </Text>
               </View>
             </View>
