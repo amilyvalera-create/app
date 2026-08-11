@@ -1,4 +1,4 @@
-"""Shared fixtures for VENEGE backend tests."""
+"""Shared fixtures for VENEGE backend tests (schema v2 - Precios Actual)."""
 import os
 import pytest
 import requests
@@ -14,23 +14,26 @@ SEED_USERS = {
     "tires_center": ("TiresCenter", "Tirescenter2026"),
 }
 
+# Confirmed production mapping (schema v2). Master = all 20 columns.
 ROLE_ALLOWED_KEYS = {
-    "master": None,  # all 19
-    "caracas": {"VENTA_CARACAS", "VENTA_CARACAS_BS_18", "VENTA_CARACAS_CASH_21", "VENTA_CARACAS_ZELLE_24"},
-    "oriente_sur": {
-        "VENTA_ORIENTE_SUR_Y_BOLIVAR_BS_28",
-        "VENTA_ORIENTE_SUR_Y_BOLIVAR_CASH_31",
-        "VENTA_ORIENTE_SUR_Y_BOLIVAR_ZELLE_34",
-    },
-    "oriente_norte": {
-        "VENTA_ORIENTE_NORTE_MONAGAS_Y_CUMANA_CASH",
-        "VENTA_ORIENTE_NORTE_MONAGAS_Y_CUMANA_ZELLE_44",
-    },
-    "panofre": {"PANOFRE_BS_48", "PANOFRE_CASH_51"},
-    "tires_center": {"OTROS_CASH_95", "OTROS_ZELLE_98", "TCC_TTC_BS_102", "TCC_TTC_CASH_105"},
+    "master": None,
+    "caracas": {"CARACAS_BS", "CARACAS_CASH", "CARACAS_ZELLE"},
+    "oriente_sur": {"ORIENTE_SUR_BS", "ORIENTE_SUR_CASH", "ORIENTE_SUR_ZELLE"},
+    "oriente_norte": {"ORIENTE_NORTE_BS", "ORIENTE_NORTE_CASH", "ORIENTE_NORTE_ZELLE"},
+    "panofre": {"PANOFRE_BS", "PANOFRE_CASH"},
+    "tires_center": {"TCC_TTC_BS", "TCC_TTC_CASH", "TCC_TTC_ZELLE"},
 }
 
-ROLE_COUNT = {"master": 19, "caracas": 4, "oriente_sur": 3, "oriente_norte": 2, "panofre": 2, "tires_center": 4}
+ROLE_COUNT = {"master": 20, "caracas": 3, "oriente_sur": 3, "oriente_norte": 3, "panofre": 2, "tires_center": 3}
+
+# Column letter map (for the tampering check).
+EXPECTED_LETTERS = {
+    "CARACAS_BS": "I", "CARACAS_CASH": "J", "CARACAS_ZELLE": "K",
+    "ORIENTE_SUR_BS": "L", "ORIENTE_SUR_CASH": "M", "ORIENTE_SUR_ZELLE": "N",
+    "ORIENTE_NORTE_BS": "O", "ORIENTE_NORTE_CASH": "P", "ORIENTE_NORTE_ZELLE": "Q",
+    "PANOFRE_BS": "R", "PANOFRE_CASH": "S",
+    "TCC_TTC_BS": "AE", "TCC_TTC_CASH": "AF", "TCC_TTC_ZELLE": "AG",
+}
 
 
 @pytest.fixture(scope="session")
@@ -45,16 +48,11 @@ def api():
     return s
 
 
-def _login(api, username, password):
-    r = api.post(f"{BASE_URL}/api/auth/login", json={"username": username, "password": password}, timeout=15)
-    return r
-
-
 @pytest.fixture(scope="session")
 def tokens(api):
     out = {}
     for role, (u, p) in SEED_USERS.items():
-        r = _login(api, u, p)
+        r = api.post(f"{BASE_URL}/api/auth/login", json={"username": u, "password": p}, timeout=15)
         assert r.status_code == 200, f"Login failed for {role}: {r.status_code} {r.text}"
         out[role] = r.json()["access_token"]
     return out

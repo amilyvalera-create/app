@@ -85,14 +85,30 @@ export const api = {
       false,
     ),
   me: () => request<UserInfo>("/auth/me"),
-  search: (q: string) =>
-    request<{ results: ProductSuggestion[]; count: number }>(
-      `/products/search?q=${encodeURIComponent(q)}`,
-    ),
+  search: (q: string, opts?: { rin?: string | number; marca?: string }) => {
+    const params = new URLSearchParams();
+    if (q) params.set("q", q);
+    if (opts?.rin !== undefined && opts.rin !== "") params.set("rin", String(opts.rin));
+    if (opts?.marca) params.set("marca", opts.marca);
+    return request<{ results: ProductSuggestion[]; count: number }>(
+      `/products/search?${params.toString()}`,
+    );
+  },
+  facets: () => request<{ rins: (number | string)[]; marcas: string[] }>("/products/facets"),
   product: (sku: string) => request<ProductDetail>(`/products/${encodeURIComponent(sku)}`),
   history: () => request<{ items: HistoryItem[] }>("/history"),
   logHistory: (p: { sku: string; marca: string; descripcion: string }) =>
     request<{ ok: boolean }>("/history", { method: "POST", body: JSON.stringify(p) }),
+  favorites: () => request<{ items: HistoryItem[] }>("/favorites"),
+  addFavorite: (p: { sku: string; marca: string; descripcion: string }) =>
+    request<{ ok: boolean; favorited: boolean }>("/favorites", {
+      method: "POST",
+      body: JSON.stringify(p),
+    }),
+  removeFavorite: (sku: string) =>
+    request<{ ok: boolean; favorited: boolean }>(`/favorites/${encodeURIComponent(sku)}`, {
+      method: "DELETE",
+    }),
   refresh: () =>
     request<{ ok: boolean; product_count: number; last_sync: string | null; refreshed_at: string }>(
       "/refresh",
@@ -105,6 +121,8 @@ export const api = {
       source: string;
       worksheet: string;
       connection_ready: boolean;
+      missing_setup: string[];
+      auto_refresh_per_day: number;
       recent_global_searches: HistoryItem[];
       activity: HistoryItem[];
       total_users: number;

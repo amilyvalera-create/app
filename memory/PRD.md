@@ -37,6 +37,24 @@ All user-facing text in Spanish.
 - Spanish UI everywhere; friendly error/empty/loading states. ✅
 - Consultar inventario = phase-2 placeholder modal (no fabricated inventory). ✅
 
+## Implemented (2026-08-11) — Production update (worksheet "Precios Actual")
+- Corrected production column mapping (schema v2): I,J,K Caracas · L,M,N Oriente Sur · O,P,Q
+  Oriente Norte · R,S Panofre · AE,AF,AG TiresCenter (TCC/TTC) · AC,AD OTROS master-only.
+  TiresCenter NEVER uses OTROS. Verified by 49 backend tests.
+- Live OneDrive provider: `onedrive_service.py` does Microsoft Graph app-only (client
+  credentials) + `/shares/{id}/driveItem/content` download + openpyxl parse of "Precios
+  Actual", mapping strictly by column letter. Falls back to schema-accurate mock when
+  MS_* creds are unset. Auto-refresh scheduler runs ~3x/day (no-op without creds).
+- UX: quick filters (RIN + MARCA chip rows), per-user favorites (pin/unpin), WhatsApp
+  share quotation with VENEGE branding, refined transparent logo mark (no box).
+
+## PENDING SETUP (single item) to go LIVE
+Set these backend secrets (Deployment → Secrets), then master taps "Actualizar datos":
+  MS_TENANT_ID, MS_CLIENT_ID, MS_CLIENT_SECRET  (Entra app registration, Files.Read.All +
+  admin consent). ONEDRIVE_SHARE_URL + MS_WORKSHEET="Precios Actual" already set.
+Note: the 1drv.ms link is a OneDrive for Business share — anonymous download is blocked, so
+Microsoft Graph OAuth (above 3 secrets) is required. No app logic changes needed afterward.
+
 ## Implemented (2026-08-10)
 - Secure JWT login for all 6 seeded roles; bcrypt hashing; 401/403 enforcement.
 - Server-side column authorization (verified: caracas 4, oriente_sur 3, oriente_norte 2,

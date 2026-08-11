@@ -1,0 +1,38 @@
+{
+  "summary": "Iteration 2 (Precios Actual schema v2) - Full backend + frontend regression. 49/49 pytest tests pass. New: quick filters (rin, marca, combined), /api/products/facets, /api/favorites (add/list/delete + per-user isolation + dedupe + rin included). RBAC verified with EXACT column letter mapping: caracas=[I,J,K], oriente_sur=[L,M,N], oriente_norte=[O,P,Q], panofre=[R,S], tires_center=[AE,AF,AG] (NEVER OTROS AC/AD), master=20. Admin dashboard confirms worksheet='Precios Actual', connection_ready=false, missing_setup contains MS_TENANT_ID/MS_CLIENT_ID/MS_CLIENT_SECRET, /api/admin/sync source='mock' with row_count>0. All /api/* endpoints correctly 401 without token; /api/admin/* correctly 403 for the 5 non-master roles. History still capped at 6, deduped, per-user. Refresh works for all 6 roles. Frontend E2E (390x844 mobile viewport) passes: Caracas login -> RIN + MARCA chip rows render horizontally, tapping rin-chip-16 filters to 13 results all RIN 16, opening product shows exactly 3 tiles (CARACAS_BS/CASH/ZELLE), Favorito tile toggles to 'Guardado', Compartir (WhatsApp) button present, Buscar otro + Nueva consulta navigate correctly, logout works. Master login -> Panel Admin shows 'Conexión OneDrive pendiente' banner, worksheet 'Precios Actual', sync button works (mock reseed).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/conftest.py",
+    "/app/backend/tests/test_venege_api.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "No functional fixes required. Consider optional UX: 'Buscar otro' currently preserves the RIN/MARCA filter on home, which hides the Favoritos section until the user taps X on the filter or 'Nueva consulta'. Product decision - not a bug. Nueva consulta correctly resets state.",
+    "Optional: expose a small toast/confirmation when a favorite is added (current UI relies on the label change 'Favorito' -> 'Guardado')."
+  ],
+  "critical_code_review_comments": [
+    "schema.py cleanly locks the column letter map at module level. PRICE_COLUMNS length is 20, ROLE_COLUMN_MAP correctly excludes OTROS from tires_center.",
+    "server.py: /api/products/facets is declared BEFORE /api/products/{sku} - correct route ordering (verified working, 200 with token, 401 without).",
+    "authorized_columns() is the single source of truth server-side; direct SKU URL access with a non-master token never leaks unauthorized columns (parametrized test across 5 roles x 5 SKUs).",
+    "onedrive_service.py: is_configured() gates fetch_rows()->None fallback; sync() cleanly returns source='mock' when MS_* env vars are unset; sync exception path is wrapped in 502.",
+    "Startup schema_version='precios-actual-v2' triggers a reseed on stale mock - verified 46 products present with correct 20-column price payload.",
+    "Auto-refresh loop uses asyncio.create_task and is a no-op without MS creds (safe).",
+    "Favorites endpoint dedupes by SKU with $pull+$push and includes rin from the product doc (verified in list response)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/conftest.py (rewritten for schema v2 keys/counts)",
+    "/app/backend/tests/test_venege_api.py (rewritten: +filters +facets +favorites +column-letter check +tires_center OTROS negative)"
+  ],
+  "success_rate": {"backend": "100% (49/49)", "frontend": "100% (all E2E flows)"},
+  "seed_data_creation": "None. Used the 46 pre-seeded mock products and the 6 seeded users. Test-created favorites/history are self-contained per user.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "BASE_URL=https://venege-precios.preview.emergentagent.com. Backend tests: cd /app/backend/tests && python -m pytest -v --junitxml=/app/test_reports/pytest/pytest_results.xml. Frontend testIDs to reuse: username-input, password-input, login-submit-button, search-input, rin-filter-row, rin-chip-{n}, marca-filter-row, marca-chip-{name}, suggestion-{sku}, product-identity, price-tile-{KEY}, favorite-toggle, share-quotation, buscar-otro-button, nueva-consulta-button, favorites-list, favorite-{sku}, history-list, history-{sku}, header-logout, master-panel-link, sync-button, sync-card. MS_* env vars are intentionally empty; admin/sync source must remain 'mock'.",
+  "rca_of_issue": "N/A - no bugs found this iteration."
+}

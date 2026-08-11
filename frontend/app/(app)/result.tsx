@@ -6,6 +6,8 @@ import {
   ScrollView,
   ActivityIndicator,
   Pressable,
+  Linking,
+  Platform,
   useWindowDimensions,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -27,14 +29,16 @@ export default function Result() {
   const [product, setProduct] = useState<ProductDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [favorited, setFavorited] = useState(false);
 
   const load = useCallback(async () => {
     if (!sku) return;
     setLoading(true);
     setError(null);
     try {
-      const p = await api.product(sku);
+      const [p, favs] = await Promise.all([api.product(sku), api.favorites()]);
       setProduct(p);
+      setFavorited(favs.items.some((f) => f.sku === p.sku));
       api.logHistory({ sku: p.sku, marca: p.marca, descripcion: p.descripcion }).catch(() => {});
     } catch {
       setError("No pudimos cargar este producto. Intenta de nuevo.");
@@ -46,6 +50,44 @@ export default function Result() {
   useEffect(() => {
     load();
   }, [load]);
+
+  const toggleFavorite = async () => {
+    if (!product) return;
+    const next = !favorited;
+    setFavorited(next);
+    try {
+      if (next) {
+        await api.addFavorite({ sku: product.sku, marca: product.marca, descripcion: product.descripcion });
+      } else {
+        await api.removeFavorite(product.sku);
+      }
+    } catch {
+      setFavorited(!next); // revert on failure
+    }
+  };
+
+  const shareQuotation = async () => {
+    if (!product) return;
+    const lines = product.prices
+      .map((p) => `• ${p.label}: ${isAvailable(p.value) ? formatPrice(p.value, p.currency) : "No disponible"}`)
+      .join("\n");
+    const message =
+      `*VENEGE · Cotización*\n\n` +
+      `*${product.marca}*\n${product.descripcion}\n` +
+      `SKU: ${product.sku}  ·  RIN ${product.rin}"\n\n` +
+      `${lines}\n\n` +
+      `_Precios sujetos a cambio sin previo aviso._`;
+    const url = `https://wa.me/?text=${encodeURIComponent(message)}`;
+    try {
+      if (Platform.OS === "web") {
+        window.open(url, "_blank");
+      } else {
+        await Linking.openURL(url);
+      }
+    } catch {
+      /* silent */
+    }
+  };
 
   const contentWidth = Math.min(width - spacing.lg * 2, CONTENT_WIDTH);
   const twoCol = contentWidth > 520;
@@ -73,7 +115,6 @@ export default function Result() {
             showsVerticalScrollIndicator={false}
           >
             <View style={styles.content}>
-              {/* Product identity */}
               <View style={styles.identity} testID="product-identity">
                 <View style={styles.identityTop}>
                   <View style={styles.rinBadge}>
@@ -89,9 +130,34 @@ export default function Result() {
                   <Ionicons name="pricetag-outline" size={14} color={colors.brandSecondary} />
                   <Text style={styles.skuText}>{product.sku}</Text>
                 </View>
+
+                {/* Favorite + Share actions */}
+                <View style={styles.cardActions}>
+                  <Pressable
+                    testID="favorite-toggle"
+                    onPress={toggleFavorite}
+                    style={({ pressed }) => [styles.chipAction, favorited && styles.chipActionActive, pressed && { opacity: 0.85 }]}
+                  >
+                    <Ionicons
+                      name={favorited ? "star" : "star-outline"}
+                      size={18}
+                      color={favorited ? colors.brandSecondary : colors.onSurfaceSecondary}
+                    />
+                    <Text style={[styles.chipActionText, favorited && { color: colors.brandSecondary }]}>
+                      {favorited ? "Guardado" : "Favorito"}
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    testID="share-quotation"
+                    onPress={shareQuotation}
+                    style={({ pressed }) => [styles.chipAction, pressed && { opacity: 0.85 }]}
+                  >
+                    <Ionicons name="logo-whatsapp" size={18} color={colors.onSuccess} />
+                    <Text style={styles.chipActionText}>Compartir</Text>
+                  </Pressable>
+                </View>
               </View>
 
-              {/* Prices */}
               <View style={styles.priceHeader}>
                 <Text style={styles.priceHeaderTitle}>Precios autorizados</Text>
                 <Text style={styles.priceHeaderCount}>{product.prices.length}</Text>
@@ -138,7 +204,6 @@ export default function Result() {
             </View>
           </ScrollView>
 
-          {/* Sticky action bar */}
           <View style={[styles.actionBar, { paddingBottom: insets.bottom + spacing.md }]} testID="result-actions">
             <View style={styles.actionInner}>
               <Button
@@ -192,6 +257,20 @@ const styles = StyleSheet.create({
   desc: { fontFamily: fonts.body, fontSize: type.base, color: colors.onSurfaceSecondary, marginTop: 2 },
   skuRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: spacing.md },
   skuText: { fontFamily: fonts.body, fontSize: type.base, color: colors.brandSecondary, fontWeight: "700", letterSpacing: 0.5 },
+  cardActions: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.lg },
+  chipAction: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    height: 44,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceTertiary,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  chipActionActive: { borderColor: colors.brandSecondary },
+  chipActionText: { fontFamily: fonts.body, fontSize: type.base, color: colors.onSurfaceSecondary, fontWeight: "600" },
   priceHeader: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginTop: spacing.xl, marginBottom: spacing.md },
   priceHeaderTitle: { fontFamily: fonts.display, fontSize: type.xl, color: colors.onSurface, letterSpacing: 0.5 },
   priceHeaderCount: {

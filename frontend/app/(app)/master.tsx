@@ -88,7 +88,7 @@ export default function Master() {
                 <Text style={styles.noticeTitle}>Conexión OneDrive pendiente</Text>
                 <Text style={styles.noticeBody}>
                   Mostrando datos de referencia. Conecta la cuenta corporativa de Microsoft para leer la hoja
-                  “202607” en vivo.
+                  “Precios Actual” en vivo (requiere MS_TENANT_ID, MS_CLIENT_ID y MS_CLIENT_SECRET).
                 </Text>
               </View>
             </View>

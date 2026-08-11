@@ -8,6 +8,7 @@ touching auth, roles, search or the UI.
 """
 
 import os
+import asyncio
 import logging
 import unicodedata
 from pathlib import Path
@@ -49,6 +50,11 @@ db = client[os.environ["DB_NAME"]]
 JWT_SECRET = os.environ.get("JWT_SECRET", "venege-dev-secret-change-me")
 JWT_ALGO = "HS256"
 JWT_EXPIRE_HOURS = 12
+
+# Bump when the mock schema/keys change so stale mock data is reseeded.
+SCHEMA_VERSION = "precios-actual-v2"
+# Auto source refresh interval (3x/day). Only runs when OneDrive is configured.
+AUTO_REFRESH_SECONDS = 8 * 60 * 60
 
 app = FastAPI(title="Lista de Precios VENEGE")
 api_router = APIRouter(prefix="/api")
@@ -212,16 +218,26 @@ async def me(user: CurrentUser = Depends(get_current_user)):
 # Routes: search + product
 # ---------------------------------------------------------------------------
 @api_router.get("/products/search")
-async def search_products(q: str = "", limit: int = 12, user: CurrentUser = Depends(get_current_user)):
-    """Autocomplete: matches SKU / MARCA / DESCRIPCION. Never returns prices."""
+async def search_products(
+    q: str = "",
+    rin: Optional[str] = None,
+    marca: Optional[str] = None,
+    limit: int = 20,
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Autocomplete + quick filters (RIN, MARCA). Never returns prices."""
     nq = normalize(q)
+    nmarca = normalize(marca) if marca else None
     cursor = db.products.find({}, {"_id": 0, "sku": 1, "rin": 1, "marca": 1, "descripcion": 1, "search_blob": 1})
-    docs = await cursor.to_list(2000)
+    docs = await cursor.to_list(5000)
 
+    matched = docs
     if nq:
-        matched = [d for d in docs if nq in d.get("search_blob", "")]
-    else:
-        matched = docs
+        matched = [d for d in matched if nq in d.get("search_blob", "")]
+    if rin:
+        matched = [d for d in matched if str(d.get("rin")) == str(rin)]
+    if nmarca:
+        matched = [d for d in matched if normalize(d.get("marca", "")) == nmarca]
 
     seen = set()
     results = []
@@ -238,6 +254,16 @@ async def search_products(q: str = "", limit: int = 12, user: CurrentUser = Depe
         if len(results) >= limit:
             break
     return {"results": results, "count": len(results)}
+
+
+@api_router.get("/products/facets")
+async def product_facets(user: CurrentUser = Depends(get_current_user)):
+    """Distinct RIN and MARCA values for the quick-filter chips."""
+    docs = await db.products.find({}, {"_id": 0, "rin": 1, "marca": 1}).to_list(5000)
+    rins = sorted({d.get("rin") for d in docs if d.get("rin") not in (None, "")},
+                  key=lambda x: (isinstance(x, str), x))
+    marcas = sorted({d.get("marca") for d in docs if d.get("marca")})
+    return {"rins": rins, "marcas": marcas}
 
 
 @api_router.get("/products/{sku}")
@@ -292,6 +318,46 @@ async def add_history(entry: SearchLog, user: CurrentUser = Depends(get_current_
 
 
 # ---------------------------------------------------------------------------
+# Routes: per-user favorites (pinned products)
+# ---------------------------------------------------------------------------
+@api_router.get("/favorites")
+async def get_favorites(user: CurrentUser = Depends(get_current_user)):
+    doc = await db.favorites.find_one({"username": user.username}, {"_id": 0, "items": 1})
+    return {"items": (doc or {}).get("items", [])}
+
+
+@api_router.post("/favorites")
+async def add_favorite(entry: SearchLog, user: CurrentUser = Depends(get_current_user)):
+    product = await db.products.find_one({"sku": entry.sku}, {"_id": 0, "rin": 1})
+    item = {
+        "sku": entry.sku,
+        "marca": entry.marca,
+        "descripcion": entry.descripcion,
+        "rin": (product or {}).get("rin"),
+        "at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.favorites.update_one(
+        {"username": user.username},
+        {"$pull": {"items": {"sku": entry.sku}}},
+    )
+    await db.favorites.update_one(
+        {"username": user.username},
+        {"$push": {"items": {"$each": [item], "$position": 0, "$slice": 30}}},
+        upsert=True,
+    )
+    return {"ok": True, "favorited": True}
+
+
+@api_router.delete("/favorites/{sku}")
+async def remove_favorite(sku: str, user: CurrentUser = Depends(get_current_user)):
+    await db.favorites.update_one(
+        {"username": user.username},
+        {"$pull": {"items": {"sku": sku}}},
+    )
+    return {"ok": True, "favorited": False}
+
+
+# ---------------------------------------------------------------------------
 # Routes: refresh (all users) + admin sync (master only)
 # ---------------------------------------------------------------------------
 @api_router.post("/refresh")
@@ -309,12 +375,24 @@ async def refresh_view(user: CurrentUser = Depends(get_current_user)):
 
 @api_router.post("/admin/sync")
 async def admin_sync(user: CurrentUser = Depends(require_master)):
-    """Master-only full source synchronization (Phase 1 = reseed mock schema)."""
-    result = await onedrive.sync(db, build_mock_products, normalize)
+    """Master-only full source synchronization. Reads live OneDrive worksheet
+    "Precios Actual" when configured; otherwise reseeds schema-accurate mock."""
+    try:
+        result = await onedrive.sync(db, build_mock_products, normalize)
+    except Exception:
+        raise HTTPException(
+            status_code=502,
+            detail="No pudimos sincronizar con OneDrive. Verifica la conexión e intenta de nuevo.",
+        )
     now = datetime.now(timezone.utc).isoformat()
     await db.meta.update_one(
         {"_id": "sync"},
-        {"$set": {"last_sync": now, "source": result["source"], "row_count": result["row_count"]}},
+        {"$set": {
+            "last_sync": now,
+            "source": result["source"],
+            "row_count": result["row_count"],
+            "schema_version": SCHEMA_VERSION,
+        }},
         upsert=True,
     )
     return {"ok": True, "last_sync": now, **result}
@@ -330,8 +408,10 @@ async def admin_dashboard(user: CurrentUser = Depends(require_master)):
         "product_count": count,
         "last_sync": meta.get("last_sync"),
         "source": meta.get("source", "mock"),
-        "worksheet": "202607",
+        "worksheet": onedrive.worksheet,
         "connection_ready": onedrive.is_configured(),
+        "missing_setup": onedrive.missing_setup(),
+        "auto_refresh_per_day": 3 if onedrive.is_configured() else 0,
         "recent_global_searches": global_items[:6],
         "activity": global_items[:12],
         "total_users": await db.users.count_documents({}),
@@ -385,13 +465,20 @@ async def seed():
         )
     logger.info("Seeded %d users", len(SEED_USERS))
 
-    if await db.products.count_documents({}) == 0:
+    meta = await db.meta.find_one({"_id": "sync"}) or {}
+    stale = meta.get("schema_version") != SCHEMA_VERSION
+    empty = await db.products.count_documents({}) == 0
+
+    # Reseed mock only when empty or the mock schema changed AND we are not on
+    # a live OneDrive source (never wipe live-synced data automatically).
+    if (empty or stale) and meta.get("source", "mock") == "mock":
         products = build_mock_products()
         for p in products:
             p["search_blob"] = " ".join([
                 normalize(p["sku"]), normalize(p["marca"]),
                 normalize(p["descripcion"]), normalize(str(p["rin"])),
             ])
+        await db.products.delete_many({})
         await db.products.insert_many(products)
         await db.meta.update_one(
             {"_id": "sync"},
@@ -399,10 +486,38 @@ async def seed():
                 "last_sync": datetime.now(timezone.utc).isoformat(),
                 "source": "mock",
                 "row_count": len(products),
+                "schema_version": SCHEMA_VERSION,
             }},
             upsert=True,
         )
-        logger.info("Seeded %d products", len(products))
+        logger.info("Seeded %d products (schema %s)", len(products), SCHEMA_VERSION)
+
+    # Kick off the automatic source refresh loop (only acts when configured).
+    asyncio.create_task(_auto_refresh_loop())
+
+
+async def _auto_refresh_loop():
+    """Automatic source refresh ~3x/day when OneDrive is configured. No-op for
+    mock data (which never changes)."""
+    while True:
+        await asyncio.sleep(AUTO_REFRESH_SECONDS)
+        if not onedrive.is_configured():
+            continue
+        try:
+            result = await onedrive.sync(db, build_mock_products, normalize)
+            await db.meta.update_one(
+                {"_id": "sync"},
+                {"$set": {
+                    "last_sync": datetime.now(timezone.utc).isoformat(),
+                    "source": result["source"],
+                    "row_count": result["row_count"],
+                    "schema_version": SCHEMA_VERSION,
+                }},
+                upsert=True,
+            )
+            logger.info("Auto-refresh synced %d rows from %s", result["row_count"], result["source"])
+        except Exception as e:
+            logger.warning("Auto-refresh failed, will retry next cycle: %s", e)
 
 
 @app.on_event("shutdown")

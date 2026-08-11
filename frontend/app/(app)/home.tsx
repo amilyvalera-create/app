@@ -7,6 +7,7 @@ import {
   Pressable,
   ActivityIndicator,
   Modal,
+  ScrollView,
 } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -28,14 +29,23 @@ export default function Home() {
   const [results, setResults] = useState<ProductSuggestion[]>([]);
   const [searching, setSearching] = useState(false);
   const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [favorites, setFavorites] = useState<HistoryItem[]>([]);
+  const [rins, setRins] = useState<(number | string)[]>([]);
+  const [marcas, setMarcas] = useState<string[]>([]);
+  const [activeRin, setActiveRin] = useState<number | string | null>(null);
+  const [activeMarca, setActiveMarca] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [showInventory, setShowInventory] = useState(false);
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const loadHistory = useCallback(async () => {
+  const hasFilter = activeRin !== null || activeMarca !== null;
+  const showResults = query.trim().length > 0 || hasFilter;
+
+  const loadSidebars = useCallback(async () => {
     try {
-      const res = await api.history();
-      setHistory(res.items);
+      const [h, f] = await Promise.all([api.history(), api.favorites()]);
+      setHistory(h.items);
+      setFavorites(f.items);
     } catch {
       /* silent */
     }
@@ -43,33 +53,49 @@ export default function Home() {
 
   useFocusEffect(
     useCallback(() => {
-      loadHistory();
-    }, [loadHistory]),
+      loadSidebars();
+    }, [loadSidebars]),
   );
 
-  const runSearch = useCallback(async (q: string) => {
-    setSearching(true);
-    try {
-      const res = await api.search(q);
-      setResults(res.results);
-    } catch {
-      setResults([]);
-    } finally {
-      setSearching(false);
-    }
+  useEffect(() => {
+    api
+      .facets()
+      .then((f) => {
+        setRins(f.rins);
+        setMarcas(f.marcas);
+      })
+      .catch(() => {});
   }, []);
+
+  const runSearch = useCallback(
+    async (q: string, rin: number | string | null, marca: string | null) => {
+      setSearching(true);
+      try {
+        const res = await api.search(q, {
+          rin: rin ?? undefined,
+          marca: marca ?? undefined,
+        });
+        setResults(res.results);
+      } catch {
+        setResults([]);
+      } finally {
+        setSearching(false);
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     if (debounce.current) clearTimeout(debounce.current);
-    if (query.trim().length === 0) {
+    if (!showResults) {
       setResults([]);
       return;
     }
-    debounce.current = setTimeout(() => runSearch(query.trim()), 220);
+    debounce.current = setTimeout(() => runSearch(query.trim(), activeRin, activeMarca), 220);
     return () => {
       if (debounce.current) clearTimeout(debounce.current);
     };
-  }, [query, runSearch]);
+  }, [query, activeRin, activeMarca, showResults, runSearch]);
 
   const openProduct = (sku: string) => {
     router.push({ pathname: "/(app)/result", params: { sku } });
@@ -79,8 +105,8 @@ export default function Home() {
     setRefreshing(true);
     try {
       await api.refresh();
-      await loadHistory();
-      if (query.trim()) await runSearch(query.trim());
+      await loadSidebars();
+      if (showResults) await runSearch(query.trim(), activeRin, activeMarca);
     } catch {
       /* silent */
     } finally {
@@ -90,8 +116,33 @@ export default function Home() {
 
   const newQuery = () => {
     setQuery("");
+    setActiveRin(null);
+    setActiveMarca(null);
     setResults([]);
   };
+
+  const renderSuggestion = (r: ProductSuggestion) => (
+    <Pressable
+      key={r.sku}
+      testID={`suggestion-${r.sku}`}
+      onPress={() => openProduct(r.sku)}
+      style={({ pressed }) => [styles.suggestionItem, pressed && { backgroundColor: colors.surfaceTertiary }]}
+    >
+      <View style={styles.skuBadge}>
+        <Text style={styles.skuBadgeText}>{r.rin}"</Text>
+      </View>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={styles.suggMarca} numberOfLines={1}>
+          {r.marca}
+        </Text>
+        <Text style={styles.suggDesc} numberOfLines={1}>
+          {r.descripcion}
+        </Text>
+        <Text style={styles.suggSku}>{r.sku}</Text>
+      </View>
+      <Ionicons name="chevron-forward" size={18} color={colors.onSurfaceTertiary} />
+    </Pressable>
+  );
 
   return (
     <View style={styles.root}>
@@ -120,15 +171,68 @@ export default function Home() {
               autoCorrect={false}
               returnKeyType="search"
             />
-            {query.length > 0 ? (
+            {query.length > 0 || hasFilter ? (
               <Pressable onPress={newQuery} hitSlop={8} testID="clear-search">
                 <Ionicons name="close-circle" size={20} color={colors.onSurfaceTertiary} />
               </Pressable>
             ) : null}
           </View>
 
-          {/* Suggestions */}
-          {query.trim().length > 0 ? (
+          {/* Quick filters */}
+          {rins.length > 0 ? (
+            <View style={styles.filterBlock}>
+              <Text style={styles.filterLabel}>RIN</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.chipRowContent}
+                testID="rin-filter-row"
+              >
+                {rins.map((r) => {
+                  const active = activeRin === r;
+                  return (
+                    <Pressable
+                      key={String(r)}
+                      testID={`rin-chip-${r}`}
+                      onPress={() => setActiveRin(active ? null : r)}
+                      style={[styles.chip, active && styles.chipActive]}
+                    >
+                      <Text style={[styles.chipText, active && styles.chipTextActive]}>{r}"</Text>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          ) : null}
+
+          {marcas.length > 0 ? (
+            <View style={styles.filterBlock}>
+              <Text style={styles.filterLabel}>MARCA</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.chipRowContent}
+                testID="marca-filter-row"
+              >
+                {marcas.map((m) => {
+                  const active = activeMarca === m;
+                  return (
+                    <Pressable
+                      key={m}
+                      testID={`marca-chip-${m}`}
+                      onPress={() => setActiveMarca(active ? null : m)}
+                      style={[styles.chip, active && styles.chipActive]}
+                    >
+                      <Text style={[styles.chipText, active && styles.chipTextActive]}>{m}</Text>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          ) : null}
+
+          {/* Results OR sidebars */}
+          {showResults ? (
             <View style={styles.suggestions} testID="suggestions">
               {searching ? (
                 <View style={styles.loadingRow}>
@@ -139,36 +243,46 @@ export default function Home() {
                 <StateBlock
                   icon="cube-outline"
                   title="Sin resultados"
-                  subtitle="No encontramos productos que coincidan con tu búsqueda. Prueba con otra marca o SKU."
+                  subtitle="No encontramos productos que coincidan. Prueba con otra marca, RIN o SKU."
                   testID="no-results"
                 />
               ) : (
-                results.map((r) => (
-                  <Pressable
-                    key={r.sku}
-                    testID={`suggestion-${r.sku}`}
-                    onPress={() => openProduct(r.sku)}
-                    style={({ pressed }) => [styles.suggestionItem, pressed && { backgroundColor: colors.surfaceTertiary }]}
-                  >
-                    <View style={styles.skuBadge}>
-                      <Text style={styles.skuBadgeText}>{r.rin}"</Text>
-                    </View>
-                    <View style={{ flex: 1, minWidth: 0 }}>
-                      <Text style={styles.suggMarca} numberOfLines={1}>
-                        {r.marca}
-                      </Text>
-                      <Text style={styles.suggDesc} numberOfLines={1}>
-                        {r.descripcion}
-                      </Text>
-                      <Text style={styles.suggSku}>{r.sku}</Text>
-                    </View>
-                    <Ionicons name="chevron-forward" size={18} color={colors.onSurfaceTertiary} />
-                  </Pressable>
-                ))
+                results.map(renderSuggestion)
               )}
             </View>
           ) : (
             <>
+              {/* Favorites */}
+              {favorites.length > 0 ? (
+                <>
+                  <View style={styles.sectionHeader}>
+                    <View style={styles.sectionTitleRow}>
+                      <Ionicons name="star" size={16} color={colors.brandSecondary} />
+                      <Text style={styles.sectionTitle}>Favoritos</Text>
+                    </View>
+                  </View>
+                  <View style={styles.historyList} testID="favorites-list">
+                    {favorites.slice(0, 6).map((h) => (
+                      <Pressable
+                        key={h.sku}
+                        testID={`favorite-${h.sku}`}
+                        onPress={() => openProduct(h.sku)}
+                        style={({ pressed }) => [styles.historyItem, pressed && { borderColor: colors.brandSecondary }]}
+                      >
+                        <Ionicons name="star" size={18} color={colors.brandSecondary} />
+                        <View style={{ flex: 1, minWidth: 0 }}>
+                          <Text style={styles.historyMarca} numberOfLines={1}>
+                            {h.marca} · {h.descripcion}
+                          </Text>
+                          <Text style={styles.historySku}>{h.sku}</Text>
+                        </View>
+                        <Ionicons name="arrow-forward" size={16} color={colors.onSurfaceTertiary} />
+                      </Pressable>
+                    ))}
+                  </View>
+                </>
+              ) : null}
+
               {/* Recent searches */}
               <View style={styles.sectionHeader}>
                 <Text style={styles.sectionTitle}>Últimas búsquedas</Text>
@@ -205,7 +319,6 @@ export default function Home() {
                 </View>
               )}
 
-              {/* Quick actions */}
               <View style={styles.actionsRow}>
                 <Button
                   label="Consultar inventario"
@@ -238,7 +351,6 @@ export default function Home() {
         </View>
       </KeyboardAwareScrollView>
 
-      {/* Inventory placeholder modal */}
       <Modal visible={showInventory} transparent animationType="fade" onRequestClose={() => setShowInventory(false)}>
         <Pressable style={styles.modalBackdrop} onPress={() => setShowInventory(false)}>
           <Pressable style={styles.modalCard} testID="inventory-modal">
@@ -276,6 +388,23 @@ const styles = StyleSheet.create({
     height: 60,
   },
   searchInput: { flex: 1, color: colors.onSurface, fontFamily: fonts.body, fontSize: type.xl, height: "100%" },
+  filterBlock: { marginTop: spacing.lg },
+  filterLabel: { fontFamily: fonts.body, fontSize: type.sm, color: colors.onSurfaceTertiary, letterSpacing: 2, fontWeight: "700", marginBottom: spacing.sm },
+  chipRowContent: { gap: spacing.sm, paddingRight: spacing.lg },
+  chip: {
+    flexShrink: 0,
+    height: 36,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surfaceSecondary,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  chipActive: { backgroundColor: colors.brandTertiary, borderColor: colors.brandSecondary },
+  chipText: { fontFamily: fonts.body, fontSize: type.base, color: colors.onSurfaceSecondary, fontWeight: "600" },
+  chipTextActive: { color: colors.onBrandTertiary },
   suggestions: { marginTop: spacing.lg, gap: spacing.sm },
   loadingRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, paddingVertical: spacing.xl, justifyContent: "center" },
   loadingText: { color: colors.onSurfaceTertiary, fontFamily: fonts.body, fontSize: type.base },
@@ -302,6 +431,7 @@ const styles = StyleSheet.create({
   suggDesc: { fontFamily: fonts.body, fontSize: type.base, color: colors.onSurfaceSecondary },
   suggSku: { fontFamily: fonts.body, fontSize: type.sm, color: colors.brandSecondary, marginTop: 2, fontWeight: "600" },
   sectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: spacing.xl, marginBottom: spacing.md },
+  sectionTitleRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   sectionTitle: { fontFamily: fonts.display, fontSize: type.xl, color: colors.onSurface, letterSpacing: 0.5 },
   sectionHint: { fontFamily: fonts.body, fontSize: type.sm, color: colors.onSurfaceTertiary, fontWeight: "600" },
   historyList: { gap: spacing.sm },

@@ -13,37 +13,31 @@ import { Ionicons } from "@expo/vector-icons";
 
 import { colors, radius, spacing, fonts, type, brandGradient } from "@/src/theme/tokens";
 
-const LOGO = require("@/assets/images/venege-logo.webp");
+const LOGO_FULL = require("@/assets/images/venege-transparent.png");
+const LOGO_MARK = require("@/assets/images/venege-mark.png");
 
 // -------------------------------------------------------------------- Logo
 export function VenegeLogo({ width = 180 }: { width?: number }) {
   return (
     <Image
-      source={LOGO}
-      style={{ width, height: width * 0.4 }}
+      source={LOGO_FULL}
+      style={{ width, height: width * 1.058 }}
       contentFit="contain"
       transition={200}
     />
   );
 }
 
-// The V-arrow monogram rendered as a compact brand chip using the logo asset.
+// Clean transparent V-arrow monogram — no boxed container.
 export function BrandMark({ size = 40 }: { size?: number }) {
   return (
-    <View
+    <Image
       testID="brand-mark"
-      style={{
-        width: size,
-        height: size,
-        borderRadius: radius.md,
-        overflow: "hidden",
-        alignItems: "center",
-        justifyContent: "center",
-      }}
-    >
-      <LinearGradient colors={brandGradient} style={StyleSheet.absoluteFill} />
-      <Text style={{ fontFamily: fonts.display, fontSize: size * 0.62, color: "#fff" }}>V</Text>
-    </View>
+      source={LOGO_MARK}
+      style={{ width: size * 1.13, height: size }}
+      contentFit="contain"
+      transition={150}
+    />
   );
 }
 
