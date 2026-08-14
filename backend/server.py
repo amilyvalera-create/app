@@ -33,6 +33,7 @@ from schema import (
 )
 from mock_data import build_mock_products, SEED_USERS
 from onedrive_service import OneDriveService
+from zoho_service import ZohoWorkDriveService
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
@@ -53,14 +54,16 @@ JWT_EXPIRE_HOURS = 12
 
 # Bump when the mock schema/keys change so stale mock data is reseeded.
 SCHEMA_VERSION = "precios-actual-v2"
-# Auto source refresh interval (3x/day). Only runs when OneDrive is configured.
-AUTO_REFRESH_SECONDS = 8 * 60 * 60
+# Auto source refresh interval — every 6 hours (safety interval).
+AUTO_REFRESH_SECONDS = 6 * 60 * 60
 
 app = FastAPI(title="Lista de Precios VENEGE")
 api_router = APIRouter(prefix="/api")
 security = HTTPBearer(auto_error=False)
 
 onedrive = OneDriveService()
+# PRIMARY source of truth (current): Zoho WorkDrive external link.
+source_provider = ZohoWorkDriveService()
 
 
 # ---------------------------------------------------------------------------
@@ -375,23 +378,20 @@ async def refresh_view(user: CurrentUser = Depends(get_current_user)):
 
 async def _run_sync():
     """Perform a live/mock sync and record connection health in meta.
-    Returns the sync result dict. Raises on live connection failure."""
+    Uses the current PRIMARY source provider (Zoho WorkDrive)."""
     try:
-        result = await onedrive.sync(db, build_mock_products, normalize)
+        result = await source_provider.sync(db, build_mock_products, normalize)
     except Exception as e:
         reason = str(e)
-        if "invalid_client" in reason or "AADSTS7000215" in reason:
-            msg = "No pudimos autenticar con Microsoft. Verifica MS_CLIENT_SECRET (usa el VALOR del secreto, no el ID)."
-        elif "SPO license" in reason or "BadRequest" in reason:
-            msg = ("El libro está en un OneDrive personal o el tenant no tiene licencia de SharePoint / "
-                   "OneDrive for Business. Sube 'Maestro Precios N.xlsx' al OneDrive corporativo del tenant "
-                   "para habilitar la lectura en vivo.")
-        elif "AADSTS65001" in reason or ": 403" in reason:
-            msg = "Falta el consentimiento de administrador para el permiso Files.Read.All en Azure."
+        if "download_not_enabled" in reason or "public_download_unavailable" in reason:
+            msg = ("El enlace externo de Zoho WorkDrive no permite descarga directa. Activa "
+                   "“Allow download” en el enlace, o proporciona credenciales de la API de Zoho (OAuth).")
+        elif "zoho_token_failed" in reason or "zoho_api_download_failed" in reason:
+            msg = "No pudimos leer el archivo con la API de Zoho. Verifica las credenciales OAuth de Zoho."
         elif "worksheet_not_found" in reason:
-            msg = "No encontramos la hoja 'Precios Actual' en el libro."
+            msg = "No encontramos la hoja “Precios Actual” en el archivo de Zoho WorkDrive."
         else:
-            msg = "No pudimos leer el libro de OneDrive. Verifica la conexión de Microsoft."
+            msg = "No pudimos leer el archivo de Zoho WorkDrive. Verifica el enlace o la conexión."
         await db.meta.update_one(
             {"_id": "sync"},
             {"$set": {"live_ok": False, "last_error": msg}},
@@ -436,19 +436,20 @@ async def admin_dashboard(user: CurrentUser = Depends(require_master)):
     meta = await db.meta.find_one({"_id": "sync"}, {"_id": 0}) or {}
     feed = await db.global_activity.find_one({"_id": "feed"}, {"_id": 0, "items": 1}) or {}
     global_items = feed.get("items", [])
-    credentials_set = onedrive.is_configured()
+    credentials_set = source_provider.is_configured()
     live_ok = bool(meta.get("live_ok"))
     return {
         "product_count": count,
         "last_sync": meta.get("last_sync"),
         "source": meta.get("source", "mock"),
-        "worksheet": onedrive.worksheet,
-        "table": onedrive.table,
+        "provider": "zoho",
+        "worksheet": source_provider.worksheet,
+        "table": source_provider.table,
         "connection_ready": live_ok,
         "credentials_set": credentials_set,
         "last_error": meta.get("last_error"),
-        "missing_setup": onedrive.missing_setup(),
-        "auto_refresh_per_day": 3 if credentials_set else 0,
+        "missing_setup": source_provider.missing_setup(),
+        "auto_refresh_per_day": 4,
         "recent_global_searches": global_items[:6],
         "activity": global_items[:12],
         "total_users": await db.users.count_documents({}),
@@ -529,28 +530,24 @@ async def seed():
         )
         logger.info("Seeded %d products (schema %s)", len(products), SCHEMA_VERSION)
 
-    # Kick off the automatic source refresh loop (only acts when configured).
+    # Kick off the automatic source refresh loop (every 6 hours).
     asyncio.create_task(_auto_refresh_loop())
     # One-time live sync attempt at startup so the panel reflects real status.
-    if onedrive.is_configured():
-        asyncio.create_task(_startup_sync())
+    asyncio.create_task(_startup_sync())
 
 
 async def _startup_sync():
     try:
         result = await _run_sync()
-        logger.info("Startup live sync: %d rows from %s", result["row_count"], result["source"])
+        logger.info("Startup sync: %d rows from %s", result["row_count"], result["source"])
     except Exception as e:
-        logger.warning("Startup live sync failed (check MS_CLIENT_SECRET value): %s", e)
+        logger.warning("Startup live sync failed (serving reference data): %s", e)
 
 
 async def _auto_refresh_loop():
-    """Automatic source refresh ~3x/day when OneDrive is configured. No-op for
-    mock data (which never changes)."""
+    """Automatic source refresh every 6 hours from the Zoho WorkDrive link."""
     while True:
         await asyncio.sleep(AUTO_REFRESH_SECONDS)
-        if not onedrive.is_configured():
-            continue
         try:
             result = await _run_sync()
             logger.info("Auto-refresh synced %d rows from %s", result["row_count"], result["source"])

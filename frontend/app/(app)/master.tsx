@@ -86,12 +86,12 @@ export default function Master() {
               <Ionicons name="cloud-offline-outline" size={20} color={colors.onWarning} />
               <View style={{ flex: 1 }}>
                 <Text style={styles.noticeTitle}>
-                  {data.credentials_set ? "Revisa la conexión de Microsoft" : "Conexión OneDrive pendiente"}
+                  {data.credentials_set ? "Revisa la conexión de Zoho WorkDrive" : "Conexión de datos pendiente"}
                 </Text>
                 <Text style={styles.noticeBody}>
                   {data.last_error
                     ? data.last_error
-                    : "Mostrando datos de referencia. Conecta la cuenta corporativa de Microsoft para leer la hoja “Precios Actual” en vivo (requiere MS_TENANT_ID, MS_CLIENT_ID y MS_CLIENT_SECRET)."}
+                    : "Mostrando datos de referencia. Conecta el enlace de Zoho WorkDrive con descarga habilitada para leer la hoja “Precios Actual” en vivo."}
                 </Text>
               </View>
             </View>
@@ -104,7 +104,7 @@ export default function Master() {
             <View style={styles.syncMetaRow}>
               <Ionicons name="document-text-outline" size={14} color={colors.onSurfaceTertiary} />
               <Text style={styles.syncMeta}>
-                Hoja {data?.worksheet} · Fuente: {data?.source === "mock" ? "Referencia" : "OneDrive"}
+                Hoja {data?.worksheet} · Fuente: {data?.source === "mock" ? "Referencia" : "Zoho WorkDrive"}
               </Text>
             </View>
             <Button

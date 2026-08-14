@@ -119,6 +119,7 @@ export const api = {
       product_count: number;
       last_sync: string | null;
       source: string;
+      provider: string;
       worksheet: string;
       table: string;
       connection_ready: boolean;

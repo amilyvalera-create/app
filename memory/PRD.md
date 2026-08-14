@@ -48,7 +48,23 @@ All user-facing text in Spanish.
 - UX: quick filters (RIN + MARCA chip rows), per-user favorites (pin/unpin), WhatsApp
   share quotation with VENEGE branding, refined transparent logo mark (no box).
 
-## LIVE CONNECTION STATUS (2026-08-11)
+## SOURCE OF TRUTH SWITCHED → Zoho WorkDrive (2026-08-14)
+- Primary provider is now `zoho_service.ZohoWorkDriveService` (OneDrive kept but secondary).
+  Env: ZOHO_SHARE_URL (weekly-replaceable), ZOHO_WORKSHEET="Precios Actual",
+  ZOHO_TABLE="_202606_Precios". Auto-refresh every 6 hours; shared parser in
+  `workbook_parser.py` keeps the exact column mapping/business logic for every source.
+- Two read modes: (1) PUBLIC `<share>/download` (needs "Allow download" enabled on the
+  external link) — preferred, zero creds; (2) OAUTH self-client fallback
+  (ZOHO_CLIENT_ID/SECRET/REFRESH_TOKEN/RESOURCE_ID via www.zohoapis.com).
+- BLOCKER: the external link currently returns the HTML viewer for `/download` (200 text/html),
+  i.e. direct download is NOT enabled (view-only) — so live read fails and the app serves
+  schema-accurate reference data. Master panel shows the exact Spanish reason.
+- TO GO LIVE (single user-side action, no app changes): EITHER enable "Allow download" on the
+  Zoho WorkDrive external link (owner: Share → Manage external link → Edit → Allow download),
+  OR provide Zoho OAuth self-client creds (WorkDrive.files.READ) + the file RESOURCE_ID.
+- When the weekly link changes: just update ZOHO_SHARE_URL (Deployment → Secrets); nothing else.
+
+## LIVE CONNECTION STATUS (2026-08-11) — OneDrive attempt (now secondary)
 - OAuth token: ✅ works (tenant e98f980c…, client fc11a183…, real secret VALUE).
 - Workbook read: ❌ blocked by Microsoft with `400 BadRequest: "Tenant does not have a
   SPO license."` The share resolves to `onedrive.live.com/personal/…` → the file lives on a
