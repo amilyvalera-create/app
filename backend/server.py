@@ -384,12 +384,16 @@ async def _run_sync():
     except Exception as e:
         reason = str(e)
         if "download_not_enabled" in reason or "public_download_unavailable" in reason:
-            msg = ("El enlace externo de Zoho WorkDrive no permite descarga directa. Activa "
-                   "“Allow download” en el enlace, o proporciona credenciales de la API de Zoho (OAuth).")
+            msg = ("El enlace de Zoho WorkDrive no permite descarga directa o no expone el archivo. "
+                   "Verifica que sea un enlace de descarga público y válido.")
         elif "zoho_token_failed" in reason or "zoho_api_download_failed" in reason:
             msg = "No pudimos leer el archivo con la API de Zoho. Verifica las credenciales OAuth de Zoho."
         elif "worksheet_not_found" in reason:
             msg = "No encontramos la hoja “Precios Actual” en el archivo de Zoho WorkDrive."
+        elif "table_not_found" in reason:
+            msg = "No encontramos la tabla “_202606_Precios” en la hoja “Precios Actual”."
+        elif "empty_dataset" in reason:
+            msg = "El archivo descargado no contiene registros válidos. Se conservaron los datos anteriores."
         else:
             msg = "No pudimos leer el archivo de Zoho WorkDrive. Verifica el enlace o la conexión."
         await db.meta.update_one(
@@ -399,7 +403,7 @@ async def _run_sync():
         )
         raise
     now = datetime.now(timezone.utc).isoformat()
-    live_ok = result["source"].startswith("onedrive")
+    live_ok = not result["source"].startswith("mock")
     await db.meta.update_one(
         {"_id": "sync"},
         {"$set": {
@@ -417,15 +421,15 @@ async def _run_sync():
 
 @api_router.post("/admin/sync")
 async def admin_sync(user: CurrentUser = Depends(require_master)):
-    """Master-only full source synchronization. Reads live OneDrive worksheet
-    "Precios Actual" (table _202606_Precios) when configured; otherwise reseeds
-    the schema-accurate mock."""
+    """Master-only full source synchronization. Reads the live Zoho WorkDrive
+    workbook (worksheet "Precios Actual", table _202606_Precios). Keeps the last
+    valid dataset if the download is invalid/unavailable."""
     try:
         result = await _run_sync()
     except Exception:
         raise HTTPException(
             status_code=502,
-            detail="No pudimos sincronizar con OneDrive. Verifica la conexión e intenta de nuevo.",
+            detail="No pudimos sincronizar con Zoho WorkDrive. Verifica el enlace e intenta de nuevo.",
         )
     return {"ok": True, **result}
 

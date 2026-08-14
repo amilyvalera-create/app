@@ -59,8 +59,9 @@ def _map_row(row, id_idx, price_idx):
     }
 
 
-def parse_workbook(content: bytes, worksheet: str, table: str):
-    """Parse xlsx bytes → list of product dicts. Prefers the named table."""
+def parse_workbook(content: bytes, worksheet: str, table: str, require_table: bool = True):
+    """Parse xlsx bytes → list of product dicts. Prefers the named table.
+    Raises if the required worksheet (or table, when require_table) is missing."""
     wb = load_workbook(io.BytesIO(content), read_only=False, data_only=True)
     try:
         if worksheet not in wb.sheetnames:
@@ -79,8 +80,10 @@ def parse_workbook(content: bytes, worksheet: str, table: str):
                 if str(name).replace(" ", "") == table.replace(" ", ""):
                     table_obj = t
                     break
-            if table_obj is None and len(tables):
+            if table_obj is None and not require_table and len(tables):
                 table_obj = next(iter(tables.values()))
+        if require_table and table_obj is None:
+            raise RuntimeError(f"table_not_found:{table}")
         if table_obj is not None and getattr(table_obj, "ref", None):
             start, end = table_obj.ref.split(":")
             sr = int(re.match(r"[A-Z]+(\d+)", start).group(1))

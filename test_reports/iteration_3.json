@@ -1,0 +1,39 @@
+{
+  "summary": "Iteration 3 (Zoho WorkDrive LIVE source of truth). Backend: 51/51 pytest pass. Live Zoho download confirmed - GET /api/admin/dashboard returns source='zoho:Precios Actual', provider='zoho', worksheet='Precios Actual', table='_202606_Precios', connection_ready=true, credentials_set=true, last_error=null, product_count=433. POST /api/admin/sync (master) returns row_count=433 with source='zoho:Precios Actual' and updates last_sync (connection_ready flips to true - the live_ok bug is fixed). Legacy VNG-* mock SKUs are no longer served; FIRESTONE ANV1093 real workbook SKU is present with the correct RIN 13. RBAC unchanged: caracas=I,J,K / oriente_sur=L,M,N / oriente_norte=O,P,Q / panofre=R,S / tires_center=AE,AF,AG (never OTROS AC/AD) / master=20. Admin-only sync 403s all 5 non-master roles; /api/refresh works for all 6 roles. Search/filters/facets/favorites/history all pass on the real 433-row dataset. Frontend E2E (390x844): Caracas login -> home shows RIN + MARCA chip rows populated from real facets (FIRESTONE chip visible) -> searching FIRESTONE returns ANV1093, opening it shows exactly 3 Caracas tiles (Caracas Bs 68,98 Bs / Caracas Cash $46,91 / Caracas Zelle $45,59) with 2-decimal formatting, Favorito toggles to 'Guardado', Compartir (WhatsApp) button present, Buscar otro / Nueva consulta work. Master login -> Panel Admin shows 'Fuente: Zoho WorkDrive', 'Hoja Precios Actual', 433 productos, 6 usuarios, Conexión 'Activa', 'Actualizar datos' sync completes and stays at 433, global recent-searches feed shows real FIRESTONE SKUs.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/conftest.py",
+    "/app/backend/tests/test_venege_api.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "None. All targeted flows work on LIVE Zoho data.",
+    "Optional cleanup (not a bug): server.py /api/admin/sync docstring and its HTTPException message still say 'OneDrive'. Cosmetic only; behavior is Zoho and correctly reported by /api/admin/dashboard.",
+    "Optional cleanup (not a bug): admin_sync 502 error text hardcodes 'OneDrive'; consider updating to 'Zoho WorkDrive' for consistency with the Spanish messages in _run_sync().",
+    "Optional: /app/memory/test_credentials.md still mentions OneDrive as data source. Update the note to Zoho WorkDrive to match reality; credentials themselves are unchanged and correct."
+  ],
+  "critical_code_review_comments": [
+    "zoho_service.py correctly rejects HTML/preview: _is_excel() enforces 200 + Excel/octet-stream content-type + PK signature; fetch_rows() raises 'empty_dataset' on 0 rows so sync() never wipes valid data.",
+    "server.py _run_sync() only replaces DB inside ZohoWorkDriveService.sync() after fetch_rows() succeeds; on any exception it sets meta.live_ok=false + Spanish last_error and preserves existing products (verified: 433 rows persist across a manual failure path).",
+    "server.py: fixed live_ok correctly = not result['source'].startswith('mock'); dashboard.connection_ready reflects the current live state (was previously falsely False when source became 'zoho:...').",
+    "workbook_parser.py enforces worksheet+table with require_table=True; raises worksheet_not_found / table_not_found, mapped to Spanish admin messages.",
+    "schema.py role -> column keys unchanged; PRICE_COLUMNS letters still A/B/C/D identity + E..AG prices; tires_center still excludes OTROS AC/AD.",
+    "authorized_columns() remains single source of truth server-side - verified across all 6 roles x sample SKUs.",
+    "server.py: /api/products/facets declared before /api/products/{sku} (route ordering correct)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_venege_api.py (updated TestAdminProtection for Zoho: connection_ready=True, source='zoho:Precios Actual', row_count>=400; added test_live_dataset_is_real_not_mock (ANV1093 FIRESTONE, no VNG-*), test_search_firestone_returns_real_hits; guarded test_null_prices_present against SKUs with URL-unsafe chars)"
+  ],
+  "success_rate": {"backend": "100% (51/51)", "frontend": "100% (all requested Caracas + Master flows on live data)"},
+  "seed_data_creation": "None. Used the 433 live-synced Zoho rows and 6 pre-seeded users.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "LIVE Zoho WorkDrive is the source of truth (433 rows, worksheet 'Precios Actual', table '_202606_Precios'). Dashboard MUST show connection_ready=true, source='zoho:Precios Actual', last_error=null. Real SKUs are FIRESTONE ANV1093/ANV1495/... (do NOT expect VNG-* legacy SKUs). Frontend testIDs unchanged (see iteration_2 context). Backend tests: cd /app/backend/tests && python -m pytest -v --junitxml=/app/test_reports/pytest/pytest_results.xml (~24s serial, ~90s if the live Zoho fetch is slow inside test_master_sync_live_zoho). If the network to Zoho is momentarily blocked the DB still serves the persisted 433 rows and dashboard stays healthy; only /api/admin/sync would 502 with a Spanish last_error - keep the existing dataset intact.",
+  "rca_of_issue": "N/A - the requested PRIMARY bug fix (switch source to Zoho public download + fix connection_ready) is verified working end-to-end."
+}

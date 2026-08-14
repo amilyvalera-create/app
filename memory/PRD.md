@@ -48,6 +48,17 @@ All user-facing text in Spanish.
 - UX: quick filters (RIN + MARCA chip rows), per-user favorites (pin/unpin), WhatsApp
   share quotation with VENEGE branding, refined transparent logo mark (no box).
 
+## LIVE ✅ (2026-08-14) — Zoho WorkDrive direct download connected
+- Direct-download link works: the custom-domain `/download` serves the WorkDrive viewer HTML,
+  from which the provider extracts `resourceId` + `linkId` and downloads the real .xlsx from
+  `files-accl.zohoexternal.com/public/workdrive-external/download/{resourceId}?x-cli-msg={"linkId":..}`.
+- Validation: only accepts Excel content-type + PK signature (rejects HTML/preview/login),
+  requires sheet "Precios Actual" + table "_202606_Precios", rejects empty parse; on any
+  failure keeps the last valid dataset and shows Admin a Spanish error.
+- Verified: 433 records loaded; real SKUs (e.g. FIRESTONE ANV1093); RBAC intact; 51/51 backend
+  tests + full E2E pass (iteration_3). Auto-refresh every 6h; manual refresh all; full sync Admin only.
+- Weekly rotation: update ZOHO_SHARE_URL only.
+
 ## SOURCE OF TRUTH SWITCHED → Zoho WorkDrive (2026-08-14)
 - Primary provider is now `zoho_service.ZohoWorkDriveService` (OneDrive kept but secondary).
   Env: ZOHO_SHARE_URL (weekly-replaceable), ZOHO_WORKSHEET="Precios Actual",

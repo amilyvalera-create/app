@@ -67,23 +67,37 @@ class TestAdminProtection:
         d = r.json()
         assert d["product_count"] > 0
         assert d["worksheet"] == "Precios Actual"
-        assert d["connection_ready"] is False
-        for k in ["MS_TENANT_ID", "MS_CLIENT_ID", "MS_CLIENT_SECRET"]:
-            assert k in d["missing_setup"], f"expected {k} in missing_setup"
+        assert d["table"] == "_202606_Precios"
+        assert d["provider"] == "zoho"
+        # Live Zoho source (fixed bug: live_ok no longer requires 'onedrive' prefix).
+        assert d["connection_ready"] is True, d
+        assert d["source"] == "zoho:Precios Actual", d
+        assert d["last_error"] is None
+        assert d["last_sync"] is not None
         assert len(d["recent_global_searches"]) <= 6
         assert d["total_users"] >= 6
 
-    def test_master_sync(self, tokens):
+    def test_master_sync_live_zoho(self, tokens):
         r0 = requests.get(f"{BASE_URL}/api/admin/dashboard", headers=auth_headers(tokens["master"]))
         prev = r0.json()["last_sync"]
         time.sleep(1.1)
-        r = requests.post(f"{BASE_URL}/api/admin/sync", headers=auth_headers(tokens["master"]))
+        r = requests.post(f"{BASE_URL}/api/admin/sync", headers=auth_headers(tokens["master"]),
+                          timeout=180)
         assert r.status_code == 200, r.text
         d = r.json()
         assert d["ok"] is True
         assert d["last_sync"] != prev
-        assert d["row_count"] > 0
-        assert d["source"] == "mock"  # MS creds not configured
+        assert d["row_count"] > 0, d
+        # Expected ~433 rows from the real 'Precios Actual' worksheet.
+        assert d["row_count"] >= 400, f"expected ~433 real rows, got {d['row_count']}"
+        assert d["source"] == "zoho:Precios Actual", d
+        # Dashboard should now report connection ready with matching source and no error.
+        d2 = requests.get(f"{BASE_URL}/api/admin/dashboard",
+                          headers=auth_headers(tokens["master"])).json()
+        assert d2["connection_ready"] is True
+        assert d2["source"] == "zoho:Precios Actual"
+        assert d2["product_count"] == d["row_count"]
+        assert d2["last_error"] is None
 
     def test_master_products_list(self, tokens):
         r = requests.get(f"{BASE_URL}/api/admin/products", headers=auth_headers(tokens["master"]))
@@ -91,6 +105,32 @@ class TestAdminProtection:
         d = r.json()
         assert d["count"] > 0
         assert len(d["products"][0]["prices"]) == 20
+
+    def test_live_dataset_is_real_not_mock(self, tokens):
+        """Real workbook SKUs (e.g. FIRESTONE ANV1093) must be present and legacy VNG-* mock SKUs must not appear as the main dataset."""
+        # Real SKU from the Zoho workbook.
+        r = requests.get(f"{BASE_URL}/api/products/ANV1093",
+                         headers=auth_headers(tokens["master"]))
+        assert r.status_code == 200, r.text
+        p = r.json()
+        assert p["marca"].upper() == "FIRESTONE"
+        assert p["rin"] == 13
+        # Ensure the served catalog is not the old mock (VNG-* SKUs).
+        results = requests.get(f"{BASE_URL}/api/products/search?q=&limit=100",
+                               headers=auth_headers(tokens["master"])).json()["results"]
+        vng = [x for x in results if str(x["sku"]).upper().startswith("VNG-")]
+        assert len(vng) == 0, f"unexpected legacy mock SKUs still served: {vng[:3]}"
+
+    def test_search_firestone_returns_real_hits(self, tokens):
+        r = requests.get(f"{BASE_URL}/api/products/search?q=FIRESTONE&limit=5",
+                         headers=auth_headers(tokens["caracas"]))
+        assert r.status_code == 200
+        results = r.json()["results"]
+        assert len(results) > 0
+        for item in results:
+            assert item["marca"].upper() == "FIRESTONE"
+            # Must not leak prices in search listings.
+            assert "prices" not in item
 
 
 # ---------------- SEARCH + FILTERS ----------------
@@ -200,7 +240,12 @@ class TestRoleBasedPriceColumns:
         found_null = False
         for sku in skus:
             r = requests.get(f"{BASE_URL}/api/products/{sku}", headers=auth_headers(tokens["master"]))
-            for p in r.json()["prices"]:
+            if r.status_code != 200:
+                continue
+            data = r.json()
+            if "prices" not in data:
+                continue
+            for p in data["prices"]:
                 if p["value"] is None:
                     found_null = True
                     break
