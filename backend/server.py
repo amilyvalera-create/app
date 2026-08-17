@@ -28,6 +28,7 @@ from schema import (
     PRICE_COLUMNS,
     ROLE_COLUMN_MAP,
     ROLE_LABELS,
+    MASTER_COLUMNS,
     column_currency,
     column_label,
 )
@@ -145,9 +146,10 @@ async def require_master(user: CurrentUser = Depends(get_current_user)) -> Curre
 
 
 def authorized_columns(role: str) -> List[str]:
-    """Server-side source of truth for which price columns a role may read."""
+    """Server-side source of truth for which SELLING columns a role may read.
+    Costs are never included for any role."""
     if role == "master":
-        return [c["key"] for c in PRICE_COLUMNS]
+        return list(MASTER_COLUMNS)
     return ROLE_COLUMN_MAP.get(role, [])
 
 
@@ -198,6 +200,7 @@ async def login(body: LoginRequest):
         "token_type": "bearer",
         "user": {
             "username": user["username"],
+            "name": user.get("name", user["username"]),
             "role": user["role"],
             "role_label": ROLE_LABELS.get(user["role"], user["role"]),
             "is_master": user["role"] == "master",
@@ -208,12 +211,24 @@ async def login(body: LoginRequest):
 
 @api_router.get("/auth/me")
 async def me(user: CurrentUser = Depends(get_current_user)):
+    doc = await db.users.find_one({"username": user.username}, {"_id": 0, "name": 1})
     return {
         "username": user.username,
+        "name": (doc or {}).get("name", user.username),
         "role": user.role,
         "role_label": ROLE_LABELS.get(user.role, user.role),
         "is_master": user.role == "master",
         "authorized_price_count": len(authorized_columns(user.role)),
+    }
+
+
+@api_router.get("/status")
+async def status(user: CurrentUser = Depends(get_current_user)):
+    """Lightweight status for the subtle 'last updated' indicator (all users)."""
+    meta = await db.meta.find_one({"_id": "sync"}, {"_id": 0}) or {}
+    return {
+        "last_sync": meta.get("last_sync"),
+        "product_count": await db.products.count_documents({}),
     }
 
 
@@ -308,7 +323,7 @@ async def add_history(entry: SearchLog, user: CurrentUser = Depends(get_current_
     )
     await db.search_history.update_one(
         {"username": user.username},
-        {"$push": {"items": {"$each": [item], "$position": 0, "$slice": 6}}},
+        {"$push": {"items": {"$each": [item], "$position": 0, "$slice": 5}}},
         upsert=True,
     )
     global_item = {**item, "username": user.username}
@@ -500,6 +515,7 @@ async def seed():
             {"username": u["username"]},
             {"$set": {
                 "username": u["username"],
+                "name": u.get("name", u["username"]),
                 "role": u["role"],
                 "password_hash": hash_password(u["password"]),
             }},

@@ -48,6 +48,22 @@ All user-facing text in Spanish.
 - UX: quick filters (RIN + MARCA chip rows), per-user favorites (pin/unpin), WhatsApp
   share quotation with VENEGE branding, refined transparent logo mark (no box).
 
+## PHASE 1 REFINEMENTS (2026-08-17)
+- New named users + composite roles (see test_credentials.md): gerencia+Admon (master),
+  roilan=caracas_tirescenter, adriana=caracas_panofre, andrea.casanova=caracas,
+  andrea.manrique=oriente_sur, mariateresa=oriente_norte.
+- Costs (E–H) HIDDEN for ALL roles incl. master; master shows all SELLING blocks only.
+- Added selling price "Precio BF Goodrich" = column AM header "BF VIP_VIP_143" (resolved by
+  header text) to every authorized view; "No disponible" when empty (~47 SKUs carry it).
+- Header: reduced logo, time-based greeting + first name; subtle "Actualizado" timestamp
+  (GET /api/status). Recent searches capped at 5; favorites separate.
+- Quick filters (RIN + MARCA) + "Limpiar filtros"; product cards 2-line clamp.
+- Tap any price to copy (expo-clipboard) with toast; BF tile highlighted.
+- Cotizar flow (QuoteModal): recipient + seller phone, multi-item with price picker + qty,
+  add items via search, premium branded PDF (expo-print + expo-sharing). Disabled
+  "Agregar a pedido" + disabled inventory traffic-light placeholders (Phase 2).
+- Verified: 43/43 backend tests + full E2E on LIVE Zoho (iteration_4). No costs anywhere.
+
 ## LIVE ✅ (2026-08-14) — Zoho WorkDrive direct download connected
 - Direct-download link works: the custom-domain `/download` serves the WorkDrive viewer HTML,
   from which the provider extracts `resourceId` + `linkId` and downloads the real .xlsx from

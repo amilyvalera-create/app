@@ -1,22 +1,12 @@
-"""Approved workbook schema for worksheet "Precios Actual".
+"""Approved workbook schema for worksheet "Precios Actual" (table _202606_Precios).
 
-SINGLE SOURCE OF TRUTH for the column map, the role -> allowed columns
-authorization matrix, and display labels. Mapping is strictly by workbook COLUMN
-LETTER (confirmed production mapping) so unrelated workbook values never cross
-into app fields.
-
-Confirmed production mapping (worksheet "Precios Actual"):
-  A=SKU  B=RIN  C=MARCA  D=DESCRIPCION
-  E=COSTO  F=COSTO BS  G=COSTO $  H=COSTO ZELLE
-  I,J,K   -> Ventasccs   (Caracas)
-  L,M,N   -> Ventasorientesur (Oriente Sur)
-  O,P,Q   -> Ventasorientenorte (Oriente Norte)
-  R,S     -> Panofre
-  AC,AD   -> OTROS (Cash, Zelle)  --> NEVER for TiresCenter
-  AE,AF,AG-> TiresCenter (TCC/TTC Bs, Cash, Zelle_108)
+SINGLE SOURCE OF TRUTH for the column map, role -> allowed SELLING columns, and
+labels. COST columns (E-H) are NEVER exposed to any role, including master.
+Mapping is by column LETTER; BF Goodrich (col AM) is additionally resolved by its
+header text at parse time for stability.
 """
 
-# letter -> internal key. Order defines display order for master.
+# letter -> internal key. Order defines display order.
 PRICE_COLUMNS = [
     {"letter": "E", "key": "COSTO"},
     {"letter": "F", "key": "COSTO_BS"},
@@ -38,35 +28,54 @@ PRICE_COLUMNS = [
     {"letter": "AE", "key": "TCC_TTC_BS"},
     {"letter": "AF", "key": "TCC_TTC_CASH"},
     {"letter": "AG", "key": "TCC_TTC_ZELLE"},
+    {"letter": "AM", "key": "BF_GOODRICH", "header_match": "BF"},
 ]
 
-# Product identity columns (letter -> field).
 IDENTITY_COLUMNS = {"A": "sku", "B": "rin", "C": "marca", "D": "descripcion"}
 
-# Role -> authorized price column keys (server-enforced). Master gets everything.
+# Cost fields — hidden from EVERY role, always.
+COST_KEYS = ["COSTO", "COSTO_BS", "COSTO_DOLAR", "COSTO_ZELLE"]
+
+# BF Goodrich (col AM) is a SELLING price visible to every authorized view.
+BF_GOODRICH = "BF_GOODRICH"
+
+_CARACAS = ["CARACAS_BS", "CARACAS_CASH", "CARACAS_ZELLE"]
+_ORIENTE_SUR = ["ORIENTE_SUR_BS", "ORIENTE_SUR_CASH", "ORIENTE_SUR_ZELLE"]
+_ORIENTE_NORTE = ["ORIENTE_NORTE_BS", "ORIENTE_NORTE_CASH", "ORIENTE_NORTE_ZELLE"]
+_PANOFRE = ["PANOFRE_BS", "PANOFRE_CASH"]
+_TIRES_CENTER = ["TCC_TTC_BS", "TCC_TTC_CASH", "TCC_TTC_ZELLE"]
+_OTROS = ["OTROS_CASH", "OTROS_ZELLE"]
+
+# Role -> authorized SELLING column keys (server-enforced). BF Goodrich appended
+# to every view. Master (Gerencia) sees all selling blocks, never costs.
 ROLE_COLUMN_MAP = {
-    "caracas": ["CARACAS_BS", "CARACAS_CASH", "CARACAS_ZELLE"],
-    "oriente_sur": ["ORIENTE_SUR_BS", "ORIENTE_SUR_CASH", "ORIENTE_SUR_ZELLE"],
-    "oriente_norte": ["ORIENTE_NORTE_BS", "ORIENTE_NORTE_CASH", "ORIENTE_NORTE_ZELLE"],
-    "panofre": ["PANOFRE_BS", "PANOFRE_CASH"],
-    # TiresCenter uses TCC/TTC columns ONLY. Never OTROS (AC/AD).
-    "tires_center": ["TCC_TTC_BS", "TCC_TTC_CASH", "TCC_TTC_ZELLE"],
+    "caracas": _CARACAS + [BF_GOODRICH],
+    "caracas_panofre": _CARACAS + _PANOFRE + [BF_GOODRICH],
+    "caracas_tirescenter": _CARACAS + _TIRES_CENTER + [BF_GOODRICH],
+    "oriente_sur": _ORIENTE_SUR + [BF_GOODRICH],
+    "oriente_norte": _ORIENTE_NORTE + [BF_GOODRICH],
+    # Legacy single-region roles kept for backward compatibility.
+    "panofre": _PANOFRE + [BF_GOODRICH],
+    "tires_center": _TIRES_CENTER + [BF_GOODRICH],
 }
 
+# Gerencia / master: every selling block (no costs).
+MASTER_COLUMNS = (
+    _CARACAS + _ORIENTE_SUR + _ORIENTE_NORTE + _PANOFRE + _OTROS + _TIRES_CENTER + [BF_GOODRICH]
+)
+
 ROLE_LABELS = {
-    "master": "Administrador",
-    "caracas": "Ventas Caracas",
-    "oriente_sur": "Ventas Oriente Sur",
-    "oriente_norte": "Ventas Oriente Norte",
+    "master": "Gerencia",
+    "caracas": "Caracas",
+    "caracas_panofre": "Caracas + Panofre",
+    "caracas_tirescenter": "Caracas + Tires Center",
+    "oriente_sur": "Oriente Sur",
+    "oriente_norte": "Oriente Norte",
     "panofre": "Panofre",
     "tires_center": "Tires Center",
 }
 
 _COLUMN_LABELS = {
-    "COSTO": "Costo",
-    "COSTO_BS": "Costo Bs",
-    "COSTO_DOLAR": "Costo $",
-    "COSTO_ZELLE": "Costo Zelle",
     "CARACAS_BS": "Caracas Bs",
     "CARACAS_CASH": "Caracas Cash",
     "CARACAS_ZELLE": "Caracas Zelle",
@@ -83,6 +92,7 @@ _COLUMN_LABELS = {
     "TCC_TTC_BS": "TCC/TTC Bs",
     "TCC_TTC_CASH": "TCC/TTC Cash",
     "TCC_TTC_ZELLE": "TCC/TTC Zelle",
+    "BF_GOODRICH": "Precio BF Goodrich",
 }
 
 
@@ -91,14 +101,12 @@ def column_label(key: str) -> str:
 
 
 def column_currency(key: str) -> str:
-    """Currency derived from the column naming convention: *_BS -> Bolivares, else USD."""
     if key.endswith("_BS"):
         return "Bs"
     return "$"
 
 
 def col_letter_to_index(letter: str) -> int:
-    """Excel column letter (e.g. 'A', 'AG') -> 0-based index."""
     letter = letter.strip().upper()
     idx = 0
     for ch in letter:

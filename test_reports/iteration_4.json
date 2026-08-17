@@ -1,0 +1,43 @@
+{
+  "summary": "Phase-1 refinements verified end-to-end on LIVE Zoho WorkDrive (~418+ rows). Backend: 43/43 pytest pass. New users login (gerencia/Gerencia2026, Admon/Master, roilan/Roilan2026, adriana/Adriana2026, andrea.casanova/Casanova2026, andrea.manrique/Manrique2026, mariateresa/MariaTeresa2026). Composite role columns verified via GET /api/products/{sku}: gerencia/Admon (master)=17 tiles = CARACAS(I,J,K)+ORIENTE_SUR(L,M,N)+ORIENTE_NORTE(O,P,Q)+PANOFRE(R,S)+OTROS(AC,AD)+TCC_TTC(AE,AF,AG)+BF_GOODRICH(AM); roilan (caracas_tirescenter)=7 = CARACAS+TCC/TTC+BF; adriana (caracas_panofre)=6 = CARACAS+PANOFRE+BF; andrea.casanova (caracas)=4 = CARACAS+BF; andrea.manrique (oriente_sur)=4 = ORIENTE_SUR+BF; mariateresa (oriente_norte)=4 = ORIENTE_NORTE+BF. Zero cost keys (COSTO/COSTO_BS/COSTO_DOLAR/COSTO_ZELLE) leak for ANY role including master (verified across ~10 SKUs per role). URL tampering test confirmed non-authorized keys never returned for the smaller role. BF Goodrich (col AM, label 'Precio BF Goodrich', currency '$', 2-decimals) present for every role with a real mix of populated and null values (No disponible). Live Zoho: /api/admin/dashboard connection_ready=true, source='zoho:Precios Actual', worksheet='Precios Actual', table='_202606_Precios', last_error=null. POST /api/admin/sync (master) returns row_count>=400. /api/status returns last_sync+product_count for every authed user. /api/auth/me returns name+role_label per user. Recent history now capped at 5 (verified with 8-push). /api/products/facets returns real RIN + MARCA. ?rin= and ?marca= filters work. Admin endpoints 403 for all 5 seller roles, 200 for gerencia & Admon. /api/refresh works for all 7 users. Frontend E2E (390x844): roilan login -> header greeting 'Buenas .../Buenos ..., Roilan' + role 'Caracas + Tires Center' + logout + subtle 'Actualizado' line all visible; 15 RIN chips + 13 MARCA chips populated from real facets, 'Limpiar filtros' appears and works; FIRESTONE search opens ANV1093 showing 7 price tiles (CARACAS x3 + TCC_TTC x3 + BF_GOODRICH); tap a tile -> 'Precio copiado' toast + ¡Copiado! per-tile state; Favorito toggles to 'Guardado'; Compartir (WhatsApp) present; inventory-placeholder visible; Cotizar modal opens with recipient/phone/qty/generate PDF button and 'Agregar a pedido · próximamente' aria-disabled=true. gerencia login -> header 'Gerencia', master-panel-link visible, Panel Admin shows 'Zoho' + 'Precios Actual', product page shows 17 tiles including 'Precio BF Goodrich' and ZERO 'COSTO' labels anywhere in the UI. No deprecated Expo packages detected.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "result.tsx (Cotizar modal)", "issues": ["On 390x844 the quote-close (X) button is below the visible viewport when the modal opens tall (recipient+phone+empty items+search+add-order); modal is scrollable so it is not a blocker, but users may need to scroll to close. Consider making the close button sticky in the header or adding a bottom 'Cerrar' button."]}
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/conftest.py",
+    "/app/backend/tests/test_venege_api.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "None functional. Optional UX polish: make quote-close sticky at top of the modal (or add a bottom 'Cerrar' button) so the close affordance is visible without scrolling on 390x844.",
+    "Cosmetic (not a bug): server.py /api/admin/sync 502 error text still hardcodes 'Zoho WorkDrive'; already correct. mock_data.py docstring still mentions OneDrive; harmless."
+  ],
+  "critical_code_review_comments": [
+    "schema.py MASTER_COLUMNS = CARACAS+ORIENTE_SUR+ORIENTE_NORTE+PANOFRE+OTROS+TCC_TTC+[BF_GOODRICH] = 17 selling keys, ZERO cost keys — matches the requirement that master must not see costs anymore.",
+    "schema.py ROLE_COLUMN_MAP: caracas / caracas_panofre / caracas_tirescenter / oriente_sur / oriente_norte each end with [BF_GOODRICH]. Legacy panofre / tires_center roles preserved for backward compat and also include BF.",
+    "server.py build_price_payload iterates PRICE_COLUMNS in fixed order and filters by authorized_columns(role); COST_KEYS are only present in PRICE_COLUMNS letters E–H and are unreachable because no role authorization includes them.",
+    "server.py /api/history now uses $slice: 5 (was 6 in previous iteration) — matches Phase-1 'last 5' spec; per-user isolation preserved.",
+    "server.py /api/status is a lightweight endpoint requiring any authenticated user — safe for the subtle 'last updated' header line.",
+    "server.py /api/auth/me returns name + role_label — powers the greeting 'Buenas/Buenos ..., <Name>' and the role sub-title in the header.",
+    "workbook_parser.py resolves BF_GOODRICH by header_match='BF' (col AM) in addition to letter — stable if the workbook shifts columns.",
+    "mock_data.py SEED_USERS updated with the 7 new users (gerencia, Admon, roilan, adriana, andrea.casanova, andrea.manrique, mariateresa) — idempotent upsert on startup.",
+    "route ordering: /api/products/facets declared before /api/products/{sku} (correct).",
+    "Frontend home.tsx has RIN + MARCA filter rows with clear-filters, and QuoteModal has recipient/phone/items/price picker/qty/PDF generation with disabled add-to-order placeholder — all testIDs present."
+  ],
+  "updated_files": [
+    "/app/backend/tests/conftest.py (rewrote for new users, composite roles, BF_GOODRICH in ROLE_ALLOWED_KEYS, EXPECTED_LETTERS updated with OTROS AC/AD and BF AM)",
+    "/app/backend/tests/test_venege_api.py (new Phase-1 coverage: BF Goodrich per role + null mix, master-has-no-costs, tampering leak check, /api/status, /api/auth/me name+role_label, history capped at 5, 5-seller-role admin 403 + master 200)"
+  ],
+  "success_rate": {"backend": "100% (43/43)", "frontend": "100% (all requested roilan + gerencia flows on live data)"},
+  "seed_data_creation": "None. Used the LIVE Zoho-synced rows and the 7 pre-seeded users.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Phase-1 refinements are all live: 7 users (gerencia/Admon master + 5 sellers with composite roles), BF Goodrich (col AM, label 'Precio BF Goodrich', $ 2-decimals, 'No disponible' when null) appended to every authorized view, ZERO cost columns for anyone, /api/status, /api/auth/me returning name+role_label, /api/history capped at last 5 (favorites separate/unchanged), /api/products/facets for RIN+MARCA filter chips, Cotizar quote flow with PDF generation and disabled placeholders. Backend tests: cd /app/backend/tests && EXPO_PUBLIC_BACKEND_URL=$(grep EXPO_PUBLIC_BACKEND_URL /app/frontend/.env | cut -d= -f2) python -m pytest -v --junitxml=/app/test_reports/pytest/pytest_results.xml (~2min including live Zoho sync). If Zoho fetch is momentarily blocked, DB still serves persisted rows; only /api/admin/sync would 502. Live source of truth: worksheet 'Precios Actual', table '_202606_Precios', ~418 rows.",
+  "rca_of_issue": "N/A — feature-verification iteration (no bugs found)."
+}

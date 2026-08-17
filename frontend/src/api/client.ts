@@ -45,6 +45,7 @@ async function request<T>(path: string, options: RequestInit = {}, auth = true):
 
 export type UserInfo = {
   username: string;
+  name: string;
   role: string;
   role_label: string;
   is_master: boolean;
@@ -85,6 +86,7 @@ export const api = {
       false,
     ),
   me: () => request<UserInfo>("/auth/me"),
+  status: () => request<{ last_sync: string | null; product_count: number }>("/status"),
   search: (q: string, opts?: { rin?: string | number; marca?: string }) => {
     const params = new URLSearchParams();
     if (q) params.set("q", q);

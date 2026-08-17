@@ -9,12 +9,13 @@ import { colors, spacing, radius, fonts, type } from "@/src/theme/tokens";
 
 type Props = {
   title?: string;
+  subtitle?: string;
   showBack?: boolean;
   onRefresh?: () => void;
   refreshing?: boolean;
 };
 
-export function AppHeader({ title, showBack, onRefresh, refreshing }: Props) {
+export function AppHeader({ title, subtitle, showBack, onRefresh, refreshing }: Props) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user, logout } = useAuth();
@@ -33,13 +34,17 @@ export function AppHeader({ title, showBack, onRefresh, refreshing }: Props) {
               <Ionicons name="chevron-back" size={22} color={colors.onSurface} />
             </Pressable>
           ) : (
-            <BrandMark size={38} />
+            <BrandMark size={28} />
           )}
-          <View style={{ marginLeft: spacing.md }}>
+          <View style={{ marginLeft: spacing.md, flex: 1, minWidth: 0 }}>
             <Text style={styles.title} numberOfLines={1}>
               {title ?? "VENEGE"}
             </Text>
-            {user ? (
+            {subtitle ? (
+              <Text style={styles.subtitle} numberOfLines={1}>
+                {subtitle}
+              </Text>
+            ) : user ? (
               <View style={styles.roleChip}>
                 <View style={styles.dot} />
                 <Text style={styles.roleText} numberOfLines={1}>
@@ -86,6 +91,7 @@ const styles = StyleSheet.create({
   row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   left: { flexDirection: "row", alignItems: "center", flex: 1, minWidth: 0 },
   title: { fontFamily: fonts.display, fontSize: type.xl, color: colors.onSurface, letterSpacing: 0.5 },
+  subtitle: { fontFamily: fonts.body, fontSize: type.sm, color: colors.onSurfaceTertiary, marginTop: 1 },
   roleChip: { flexDirection: "row", alignItems: "center", marginTop: 1 },
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.brandSecondary, marginRight: 6 },
   roleText: { fontFamily: fonts.body, fontSize: type.sm, color: colors.onSurfaceTertiary, fontWeight: "600" },

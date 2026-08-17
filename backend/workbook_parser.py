@@ -71,6 +71,18 @@ def parse_workbook(content: bytes, worksheet: str, table: str, require_table: bo
         id_idx = {field: col_letter_to_index(letter) for letter, field in IDENTITY_COLUMNS.items()}
         price_idx = [(c["key"], col_letter_to_index(c["letter"])) for c in PRICE_COLUMNS]
 
+        # Resolve any header-matched columns (e.g. BF Goodrich at AM) by header
+        # text for stability, falling back to the letter index.
+        header = next(ws.iter_rows(min_row=1, max_row=1, values_only=True), None) or ()
+        for c in PRICE_COLUMNS:
+            match = c.get("header_match")
+            if not match:
+                continue
+            for i, val in enumerate(header):
+                if val is not None and match.upper() in str(val).upper():
+                    price_idx = [(k, (i if k == c["key"] else idx)) for k, idx in price_idx]
+                    break
+
         data_start = 2
         data_end = ws.max_row
         tables = getattr(ws, "tables", {}) or {}

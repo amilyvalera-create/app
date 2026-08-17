@@ -13,9 +13,12 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import * as Clipboard from "expo-clipboard";
 
 import { AppHeader } from "@/src/components/AppHeader";
 import { Button, StateBlock } from "@/src/components/ui";
+import { QuoteModal } from "@/src/components/QuoteModal";
+import { useAuth } from "@/src/context/AuthContext";
 import { api, ProductDetail } from "@/src/api/client";
 import { formatPrice, isAvailable } from "@/src/utils/format";
 import { colors, spacing, radius, fonts, type, CONTENT_WIDTH } from "@/src/theme/tokens";
@@ -30,6 +33,19 @@ export default function Result() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [favorited, setFavorited] = useState(false);
+  const [copied, setCopied] = useState<string | null>(null);
+  const [quoteOpen, setQuoteOpen] = useState(false);
+  const { user } = useAuth();
+
+  const copyPrice = async (label: string, value: number, currency: string) => {
+    try {
+      await Clipboard.setStringAsync(formatPrice(value, currency));
+      setCopied(label);
+      setTimeout(() => setCopied(null), 1600);
+    } catch {
+      /* ignore */
+    }
+  };
 
   const load = useCallback(async () => {
     if (!sku) return;
@@ -175,18 +191,32 @@ export default function Result() {
                   {product.prices.map((p) => {
                     const available = isAvailable(p.value);
                     return (
-                      <View
+                      <Pressable
                         key={p.key}
                         testID={`price-tile-${p.key}`}
-                        style={[styles.priceTile, { width: tileWidth }]}
+                        onPress={available ? () => copyPrice(p.label, p.value as number, p.currency) : undefined}
+                        style={({ pressed }) => [
+                          styles.priceTile,
+                          { width: tileWidth },
+                          p.key === "BF_GOODRICH" && styles.priceTileBf,
+                          pressed && available && { borderColor: colors.brandSecondary },
+                        ]}
                       >
                         <View style={styles.priceTileTop}>
                           <Text style={styles.priceLabel} numberOfLines={1}>
                             {p.label}
                           </Text>
-                          <View style={styles.posBadge}>
-                            <Text style={styles.posBadgeText}>Precio {p.position}</Text>
-                          </View>
+                          {available ? (
+                            <Ionicons
+                              name={copied === p.label ? "checkmark-circle" : "copy-outline"}
+                              size={15}
+                              color={copied === p.label ? colors.onSuccess : colors.onSurfaceTertiary}
+                            />
+                          ) : (
+                            <View style={styles.posBadge}>
+                              <Text style={styles.posBadgeText}>Precio {p.position}</Text>
+                            </View>
+                          )}
                         </View>
                         {available ? (
                           <Text style={styles.priceValue}>{formatPrice(p.value, p.currency)}</Text>
@@ -194,18 +224,54 @@ export default function Result() {
                           <Text style={styles.priceUnavailable}>No disponible</Text>
                         )}
                         <Text style={styles.priceCurrency}>
-                          {p.currency === "Bs" ? "Bolívares" : "Dólares"}
+                          {copied === p.label
+                            ? "¡Copiado!"
+                            : p.currency === "Bs"
+                              ? "Bolívares · toca para copiar"
+                              : "Dólares · toca para copiar"}
                         </Text>
-                      </View>
+                      </Pressable>
                     );
                   })}
                 </View>
               )}
+
+              {/* Inventory placeholder (Phase 2 — disabled) */}
+              <View style={styles.invBlock} testID="inventory-placeholder">
+                <View style={styles.invHead}>
+                  <Ionicons name="cube-outline" size={16} color={colors.onSurfaceTertiary} />
+                  <Text style={styles.invTitle}>Inventario</Text>
+                  <View style={styles.invSoon}><Text style={styles.invSoonText}>Próximamente</Text></View>
+                </View>
+                <View style={styles.invLights}>
+                  <View style={[styles.light, { backgroundColor: "#7A2A2E" }]} />
+                  <View style={[styles.light, { backgroundColor: "#7A5A1E" }]} />
+                  <View style={[styles.light, { backgroundColor: "#2E5A32" }]} />
+                  <Text style={styles.invHint}>Semáforo de disponibilidad (se activará pronto)</Text>
+                </View>
+              </View>
             </View>
           </ScrollView>
 
+          {/* Copy toast */}
+          {copied ? (
+            <View style={[styles.toast, { bottom: insets.bottom + 120 }]} testID="copy-toast">
+              <Ionicons name="checkmark-circle" size={16} color={colors.onSuccess} />
+              <Text style={styles.toastText}>Precio copiado</Text>
+            </View>
+          ) : null}
+
           <View style={[styles.actionBar, { paddingBottom: insets.bottom + spacing.md }]} testID="result-actions">
             <View style={styles.actionInner}>
+              <Button
+                label="Cotizar"
+                icon="document-text-outline"
+                onPress={() => setQuoteOpen(true)}
+                testID="cotizar-button"
+                fullWidth
+              />
+            </View>
+            <View style={[styles.actionInner, { marginTop: spacing.sm }]}>
               <Button
                 label="Buscar otro"
                 icon="search"
@@ -217,12 +283,20 @@ export default function Result() {
               <Button
                 label="Nueva consulta"
                 icon="add"
+                variant="ghost"
                 onPress={() => router.replace("/(app)/home")}
                 testID="nueva-consulta-button"
                 style={{ flex: 1 }}
               />
             </View>
           </View>
+
+          <QuoteModal
+            visible={quoteOpen}
+            onClose={() => setQuoteOpen(false)}
+            product={product}
+            sellerName={user?.name ?? ""}
+          />
         </>
       ) : null}
     </View>
@@ -292,6 +366,17 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     padding: spacing.lg,
   },
+  priceTileBf: { borderColor: colors.brandSecondary, backgroundColor: "#1B1614" },
+  invBlock: { marginTop: spacing.xl, backgroundColor: colors.surfaceSecondary, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.lg, opacity: 0.8 },
+  invHead: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  invTitle: { fontFamily: fonts.display, fontSize: type.lg, color: colors.onSurfaceSecondary, letterSpacing: 0.4, flex: 1 },
+  invSoon: { backgroundColor: colors.surfaceTertiary, borderRadius: radius.pill, paddingHorizontal: spacing.sm, paddingVertical: 3 },
+  invSoonText: { fontFamily: fonts.body, fontSize: 10, color: colors.onSurfaceTertiary, fontWeight: "700", letterSpacing: 0.5 },
+  invLights: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginTop: spacing.md },
+  light: { width: 14, height: 14, borderRadius: 7 },
+  invHint: { fontFamily: fonts.body, fontSize: type.sm, color: colors.onSurfaceTertiary, marginLeft: spacing.sm, flex: 1 },
+  toast: { position: "absolute", alignSelf: "center", flexDirection: "row", alignItems: "center", gap: spacing.sm, backgroundColor: colors.success, borderRadius: radius.pill, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm },
+  toastText: { fontFamily: fonts.body, fontSize: type.base, color: colors.onSuccess, fontWeight: "700" },
   priceTileTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: spacing.sm },
   priceLabel: { fontFamily: fonts.body, fontSize: type.base, color: colors.onSurfaceSecondary, fontWeight: "600", flex: 1, marginRight: spacing.sm },
   posBadge: { backgroundColor: colors.surfaceTertiary, borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: 3 },

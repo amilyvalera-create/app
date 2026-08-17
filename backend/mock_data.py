@@ -10,12 +10,13 @@ import random
 
 # Fixed credentials + roles (kept exactly as built).
 SEED_USERS = [
-    {"username": "Admon", "password": "Master", "role": "master"},
-    {"username": "Ventasccs", "password": "ccs2026", "role": "caracas"},
-    {"username": "Ventasorientesur", "password": "Orisur2026", "role": "oriente_sur"},
-    {"username": "Ventasorientenorte", "password": "Orinorte2026", "role": "oriente_norte"},
-    {"username": "Panofre", "password": "Panofre2026", "role": "panofre"},
-    {"username": "TiresCenter", "password": "Tirescenter2026", "role": "tires_center"},
+    {"name": "Gerencia Venege", "username": "gerencia", "password": "Gerencia2026", "role": "master"},
+    {"name": "Administrador", "username": "Admon", "password": "Master", "role": "master"},
+    {"name": "Roilan Narváez", "username": "roilan", "password": "Roilan2026", "role": "caracas_tirescenter"},
+    {"name": "Adriana Martínez", "username": "adriana", "password": "Adriana2026", "role": "caracas_panofre"},
+    {"name": "Andrea Casanova", "username": "andrea.casanova", "password": "Casanova2026", "role": "caracas"},
+    {"name": "Andrea Manrique", "username": "andrea.manrique", "password": "Manrique2026", "role": "oriente_sur"},
+    {"name": "María Teresa", "username": "mariateresa", "password": "MariaTeresa2026", "role": "oriente_norte"},
 ]
 
 _BRANDS = [
@@ -88,6 +89,7 @@ def build_mock_products():
             "TCC_TTC_BS": bs(1.2),
             "TCC_TTC_CASH": usd(1.2),
             "TCC_TTC_ZELLE": usd(1.24),
+            "BF_GOODRICH": usd(1.3),
         }
 
         # A few intentional blanks -> "No disponible" (never zero, never invented).

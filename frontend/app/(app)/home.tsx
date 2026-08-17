@@ -18,6 +18,7 @@ import { AppHeader } from "@/src/components/AppHeader";
 import { Button, Card, StateBlock } from "@/src/components/ui";
 import { useAuth } from "@/src/context/AuthContext";
 import { api, ProductSuggestion, HistoryItem } from "@/src/api/client";
+import { formatTimestamp } from "@/src/utils/format";
 import { colors, spacing, radius, fonts, type, CONTENT_WIDTH } from "@/src/theme/tokens";
 
 export default function Home() {
@@ -36,16 +37,23 @@ export default function Home() {
   const [activeMarca, setActiveMarca] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [showInventory, setShowInventory] = useState(false);
+  const [lastSync, setLastSync] = useState<string | null>(null);
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const hasFilter = activeRin !== null || activeMarca !== null;
   const showResults = query.trim().length > 0 || hasFilter;
 
+  const hour = new Date().getHours();
+  const greet = hour < 12 ? "Buenos días" : hour < 19 ? "Buenas tardes" : "Buenas noches";
+  const firstName = (user?.name || "").split(" ")[0];
+  const greeting = firstName ? `${greet}, ${firstName}` : greet;
+
   const loadSidebars = useCallback(async () => {
     try {
-      const [h, f] = await Promise.all([api.history(), api.favorites()]);
+      const [h, f, s] = await Promise.all([api.history(), api.favorites(), api.status()]);
       setHistory(h.items);
       setFavorites(f.items);
+      setLastSync(s.last_sync);
     } catch {
       /* silent */
     }
@@ -135,7 +143,7 @@ export default function Home() {
         <Text style={styles.suggMarca} numberOfLines={1}>
           {r.marca}
         </Text>
-        <Text style={styles.suggDesc} numberOfLines={1}>
+        <Text style={styles.suggDesc} numberOfLines={2}>
           {r.descripcion}
         </Text>
         <Text style={styles.suggSku}>{r.sku}</Text>
@@ -146,7 +154,7 @@ export default function Home() {
 
   return (
     <View style={styles.root}>
-      <AppHeader title="Buscar Precios" onRefresh={onRefresh} refreshing={refreshing} />
+      <AppHeader title={greeting} onRefresh={onRefresh} refreshing={refreshing} />
 
       <KeyboardAwareScrollView
         contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 120 }]}
@@ -157,6 +165,12 @@ export default function Home() {
         <View style={styles.content}>
           <Text style={styles.hero}>¿Qué producto buscas hoy?</Text>
           <Text style={styles.heroSub}>Busca por SKU, marca o descripción</Text>
+          {lastSync ? (
+            <View style={styles.updatedRow} testID="last-updated">
+              <Ionicons name="ellipse" size={7} color={colors.success} />
+              <Text style={styles.updatedText}>Actualizado {formatTimestamp(lastSync)}</Text>
+            </View>
+          ) : null}
 
           <View style={styles.searchBar} testID="search-bar">
             <Ionicons name="search" size={22} color={colors.onSurfaceTertiary} />
@@ -231,6 +245,13 @@ export default function Home() {
             </View>
           ) : null}
 
+          {hasFilter ? (
+            <Pressable onPress={newQuery} style={styles.clearFilters} testID="clear-filters">
+              <Ionicons name="close" size={14} color={colors.brandSecondary} />
+              <Text style={styles.clearFiltersText}>Limpiar filtros</Text>
+            </Pressable>
+          ) : null}
+
           {/* Results OR sidebars */}
           {showResults ? (
             <View style={styles.suggestions} testID="suggestions">
@@ -286,7 +307,7 @@ export default function Home() {
               {/* Recent searches */}
               <View style={styles.sectionHeader}>
                 <Text style={styles.sectionTitle}>Últimas búsquedas</Text>
-                <Text style={styles.sectionHint}>{history.length}/6</Text>
+                <Text style={styles.sectionHint}>{history.length}/5</Text>
               </View>
 
               {history.length === 0 ? (
@@ -294,7 +315,7 @@ export default function Home() {
                   <StateBlock
                     icon="time-outline"
                     title="Aún sin búsquedas"
-                    subtitle="Tus últimas 6 consultas aparecerán aquí para reabrirlas al instante."
+                    subtitle="Tus últimas 5 consultas aparecerán aquí para reabrirlas al instante."
                   />
                 </Card>
               ) : (
@@ -376,6 +397,10 @@ const styles = StyleSheet.create({
   content: { width: "100%", maxWidth: CONTENT_WIDTH, alignSelf: "center" },
   hero: { fontFamily: fonts.display, fontSize: type.xxxl, color: colors.onSurface, letterSpacing: 0.5 },
   heroSub: { fontFamily: fonts.body, fontSize: type.base, color: colors.onSurfaceTertiary, marginTop: 2, marginBottom: spacing.lg },
+  updatedRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: -spacing.sm, marginBottom: spacing.lg },
+  updatedText: { fontFamily: fonts.body, fontSize: type.sm, color: colors.onSurfaceTertiary },
+  clearFilters: { flexDirection: "row", alignItems: "center", gap: 4, alignSelf: "flex-start", marginTop: spacing.md, paddingVertical: 6, paddingHorizontal: spacing.md, borderRadius: radius.pill, backgroundColor: colors.brandTertiary },
+  clearFiltersText: { fontFamily: fonts.body, fontSize: type.sm, color: colors.onBrandTertiary, fontWeight: "700" },
   searchBar: {
     flexDirection: "row",
     alignItems: "center",
