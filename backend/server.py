@@ -191,7 +191,7 @@ async def login(body: LoginRequest):
     stored = user["password_hash"] if user else dummy
     valid = verify_password(body.password, stored)
     if not user or not valid:
-        raise HTTPException(status_code=401, detail="Usuario o contraseña incorrectos")
+        raise HTTPException(status_code=401, detail="Usuario o contraseña incorrectos.")
 
     token = create_token(user["username"], user["role"])
     allowed = authorized_columns(user["role"])
@@ -521,6 +521,9 @@ async def seed():
             }},
             upsert=True,
         )
+    # Remove any stale accounts not in the current authorized user list.
+    valid_usernames = [u["username"] for u in SEED_USERS]
+    await db.users.delete_many({"username": {"$nin": valid_usernames}})
     logger.info("Seeded %d users", len(SEED_USERS))
 
     meta = await db.meta.find_one({"_id": "sync"}) or {}

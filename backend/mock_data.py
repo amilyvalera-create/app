@@ -10,13 +10,12 @@ import random
 
 # Fixed credentials + roles (kept exactly as built).
 SEED_USERS = [
-    {"name": "Gerencia Venege", "username": "gerencia", "password": "Gerencia2026", "role": "master"},
-    {"name": "Administrador", "username": "Admon", "password": "Master", "role": "master"},
-    {"name": "Roilan Narváez", "username": "roilan", "password": "Roilan2026", "role": "caracas_tirescenter"},
-    {"name": "Adriana Martínez", "username": "adriana", "password": "Adriana2026", "role": "caracas_panofre"},
-    {"name": "Andrea Casanova", "username": "andrea.casanova", "password": "Casanova2026", "role": "caracas"},
-    {"name": "Andrea Manrique", "username": "andrea.manrique", "password": "Manrique2026", "role": "oriente_sur"},
-    {"name": "María Teresa", "username": "mariateresa", "password": "MariaTeresa2026", "role": "oriente_norte"},
+    {"name": "Gerencia venege", "username": "Gerencia venege", "password": "Master2026gerencia", "role": "master"},
+    {"name": "Roilan Narváez", "username": "Roilan Narváez", "password": "ventasccs202601", "role": "caracas_tirescenter"},
+    {"name": "Adriana Martinez", "username": "Adriana Martinez", "password": "ventasccs202602", "role": "caracas_panofre"},
+    {"name": "Andrea Casanova", "username": "Andrea Casanova", "password": "ventascorpccs2026", "role": "caracas"},
+    {"name": "Andrea Manrique", "username": "Andrea Manrique", "password": "ventasorisur2026", "role": "oriente_sur"},
+    {"name": "Maria Teresa", "username": "Maria Teresa", "password": "ventasorinorte2026", "role": "oriente_norte"},
 ]
 
 _BRANDS = [

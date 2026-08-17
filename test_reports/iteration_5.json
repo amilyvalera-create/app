@@ -1,0 +1,36 @@
+{
+  "summary": "Login-fix iteration verified end-to-end. Backend pytest 50/50 pass. All 6 EXACT usernames (with spaces + accents + caps) authenticate with the new passwords: 'Gerencia venege'/Master2026gerencia (master), 'Roilan Narváez'/ventasccs202601 (caracas_tirescenter), 'Adriana Martinez'/ventasccs202602 (caracas_panofre), 'Andrea Casanova'/ventascorpccs2026 (caracas), 'Andrea Manrique'/ventasorisur2026 (oriente_sur), 'Maria Teresa'/ventasorinorte2026 (oriente_norte). Invalid credentials return exactly detail='Usuario o contraseña incorrectos.' (401) for BOTH unknown user and wrong password — never reveals which field is wrong. Case- and accent-sensitive matching enforced ('gerencia venege' and 'Roilan Narvaez' -> 401 with same message). Stale accounts purged on startup: 'roilan','adriana','gerencia','Admon','Ventasccs','andrea.casanova','andrea.manrique','mariateresa' all return 401. Role isolation via GET /api/products/{sku} verified across the live ~418-row Zoho dataset for every user: Roilan=CARACAS(I/J/K)+TCC_TTC(AE/AF/AG)+BF(AM) — no Panofre; Adriana=CARACAS+PANOFRE(R/S)+BF — no Tires Center; Andrea Casanova=CARACAS+BF only; Andrea Manrique=ORIENTE_SUR(L/M/N)+BF; Maria Teresa=ORIENTE_NORTE(O/P/Q)+BF; Gerencia venege=all 6 selling blocks (CARACAS+ORIENTE_SUR+ORIENTE_NORTE+PANOFRE+OTROS AC/AD+TCC_TTC) + BF. Zero COST keys (COSTO/COSTO_BS/COSTO_DOLAR/COSTO_ZELLE) leak for ANY user including master (verified across 10+ SKUs per role + URL-tampering test). BF Goodrich present for every role (col AM, label 'Precio BF Goodrich', currency '$'). Admin RBAC unchanged: /api/admin/{dashboard,sync,products} -> 200 for 'Gerencia venege', 403 for the 5 sellers. Zoho live sync unchanged: connection_ready=true, source='zoho:Precios Actual', worksheet='Precios Actual', table='_202606_Precios', product_count=~418, last_error=null, /api/admin/sync returns row_count>=400. total_users=6. /api/status, /api/auth/me (name+role_label), /api/refresh, facets, history capped at 5, favorites all working. Frontend E2E (390x844): wrong password on exact username 'Andrea Manrique' shows exactly 'Usuario o contraseña incorrectos.' banner and the plaintext password is never rendered in the DOM; correct credentials reach home with time-based greeting 'Buenas tardes, Andrea' and role sub-title 'Oriente Sur' + RIN + MARCA filter chips + last-5 recent searches. No deprecated Expo packages detected.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/conftest.py",
+    "/app/backend/tests/test_venege_api.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py /api/auth/login uses a dummy bcrypt hash + constant-time verify_password path so the same 'Usuario o contraseña incorrectos.' is returned whether the user exists or not — prevents username enumeration.",
+    "server.py startup seed is idempotent (upsert by username) and calls db.users.delete_many({'username': {'$nin': valid_usernames}}) so all stale accounts from prior iterations are automatically removed.",
+    "mock_data.py SEED_USERS now contains the 6 EXACT usernames (with spaces and 'á' in Roilan Narváez) with the new passwords and correct roles — matches /app/memory/test_credentials.md exactly.",
+    "schema.py ROLE_COLUMN_MAP + MASTER_COLUMNS unchanged; BF_GOODRICH appended to every authorized view; COST_KEYS never appear in any role list — role isolation contract preserved.",
+    "server.py build_price_payload filters strictly by authorized_columns(role); COST columns E–H are never reachable for any role.",
+    "Zoho sync path untouched (source_provider = ZohoWorkDriveService); worksheet 'Precios Actual', table '_202606_Precios', 6h auto-refresh loop unchanged.",
+    "login.tsx uses TextInput with secureTextEntry (masked); no plain-text password is rendered in DOM (verified on wrong-password error and after successful login).",
+    "login.tsx error banner surfaces the backend detail verbatim via ApiError.message, so the exact Spanish string is displayed 1:1."
+  ],
+  "updated_files": [
+    "/app/backend/tests/conftest.py (rewrote SEED_USERS with EXACT usernames + spaces/accents/caps and new passwords; removed Admon; added STALE_USERNAMES + INVALID_MSG constants and role aliases)",
+    "/app/backend/tests/test_venege_api.py (new TestAuthLoginFix class: exact usernames, exact Spanish message for wrong password AND unknown user, case-sensitivity, accent-sensitivity, stale-accounts-401 parametrized; adjusted admin/RBAC/history/favorites tests to the 6-user roster; made master-cost check resilient to concurrent live re-sync)"
+  ],
+  "success_rate": {"backend": "100% (50/50)", "frontend": "100% (exact-username login + Spanish error + role greeting verified)"},
+  "seed_data_creation": "None. Used the 6 pre-seeded users + live Zoho-synced products.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Login-fix iteration is fully green. Only credentials changed vs iteration_4; role->column logic, Zoho sync, costs-hidden, BF Goodrich unchanged. To rerun: cd /app/backend/tests && EXPO_PUBLIC_BACKEND_URL=$(grep EXPO_PUBLIC_BACKEND_URL /app/frontend/.env | cut -d= -f2) python -m pytest -v --junitxml=/app/test_reports/pytest/pytest_results.xml (~2min including live Zoho sync). Users are seeded idempotently on backend startup from mock_data.SEED_USERS and stale usernames are auto-purged.",
+  "rca_of_issue": "Previous 'invalid credentials' was rejecting valid logins because SEED_USERS had stale/typo usernames + hashes. Root cause was in /app/backend/mock_data.py::SEED_USERS. Fix: replaced with the 6 EXACT authorized usernames (spaces + 'á' preserved) + new passwords; server.py startup upserts them and delete_many({'$nin': ...}) removes anything else. Backend login flow itself (bcrypt + constant-time verify + generic Spanish detail) was already correct and unchanged."
+}
