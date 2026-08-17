@@ -55,13 +55,16 @@ export function buildListHTML(channelLabel: string, products: ProductDetail[], k
 
     table { width:100%; border-collapse: collapse; font-size: 10px; }
     thead { display: table-header-group; }
-    th { text-align:left; background:#C0392B; color:#FFFFFF; padding:7px 6px; font-size:8.5px; letter-spacing:.4px; text-transform:uppercase; font-weight:700; }
+    th { text-align:left; background:#C0392B; color:#FFFFFF; padding:8px 9px; font-size:8.5px; letter-spacing:.4px; text-transform:uppercase; font-weight:700; border-bottom:2px solid #A32A32; }
     th.r, td.r { text-align:right; white-space:nowrap; }
-    td { padding:6px; border-bottom:1px solid #EFEFEF; }
-    tr:nth-child(even) td { background:#FBF9F9; }
+    /* restrained vertical separators to keep price columns aligned & scannable */
+    th.r { border-left:1px solid rgba(255,255,255,0.22); }
+    td.r { border-left:1px solid #F0F0F0; }
+    td { padding:8px 9px; border-bottom:1px solid #E7E7E7; vertical-align: top; }
+    tbody tr:nth-child(even) td { background:#FBFAFA; }
     tr { page-break-inside: avoid; }
     .mk { font-weight:700; white-space:nowrap; color:#1A1A1F; }
-    .ds { color:#4A4A50; }
+    .ds { color:#4A4A50; line-height:1.35; }
     td.na { color:#C0C0C6; font-style: italic; }
     .foot { margin-top: 20px; padding-top: 10px; border-top: 1px solid #EEE; font-size: 8.5px; color:#AAAAAA; display:flex; justify-content:space-between; }
   </style></head><body>

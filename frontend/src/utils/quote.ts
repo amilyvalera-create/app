@@ -72,12 +72,15 @@ export function buildQuoteHTML(data: QuoteData): string {
 
     table { width:100%; border-collapse: collapse; font-size: 12px; }
     thead { display: table-header-group; }
-    th { text-align:left; background:#C0392B; color:#FFFFFF; padding:9px 10px; font-size:9px; letter-spacing:.6px; text-transform:uppercase; font-weight:700; }
-    td { padding:11px 10px; border-bottom:1px solid #EFEFEF; vertical-align: top; }
-    tr.alt td { background:#FBF9F9; }
+    th { text-align:left; background:#C0392B; color:#FFFFFF; padding:9px 11px; font-size:9px; letter-spacing:.6px; text-transform:uppercase; font-weight:700; border-bottom:2px solid #A32A32; }
+    td { padding:11px 11px; border-bottom:1px solid #E7E7E7; vertical-align: top; }
+    tr.alt td { background:#FBFAFA; }
     tr { page-break-inside: avoid; }
     .c { text-align:center; } .r { text-align:right; white-space:nowrap; } .b { font-weight:800; color:#1A1A1F; }
-    .mk { font-weight:800; } .ds { color:#4A4A50; } .sk { color:#A0A0A6; font-size:9.5px; }
+    /* restrained vertical separators for the numeric columns */
+    td.c, td.r { border-left:1px solid #F0F0F0; }
+    th.c, th.r { border-left:1px solid rgba(255,255,255,0.22); }
+    .mk { font-weight:800; } .ds { color:#4A4A50; line-height:1.35; } .sk { color:#A0A0A6; font-size:9.5px; }
 
     .totals { margin-top: 22px; margin-left:auto; width: 280px; }
     .trow { display:flex; justify-content:space-between; padding:9px 4px; border-top:1px solid #EEE; font-size:13px; }
