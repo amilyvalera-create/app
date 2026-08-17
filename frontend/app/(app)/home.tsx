@@ -148,8 +148,10 @@ export default function Home() {
     setDownloading(true);
     try {
       // Full catalog for the selected channel — ignore active search / filters.
+      // BF Goodrich is intentionally excluded from list/catalog PDFs.
       const res = await api.exportList({});
-      const html = buildListHTML(current.label, res.products, keys);
+      const listKeys = keys.filter((k) => k !== "BF_GOODRICH");
+      const html = buildListHTML(current.label, res.products, listKeys);
       setPreviewHtml(html);
       setPreviewOpen(true);
     } catch {
