@@ -8,18 +8,16 @@ import {
   ActivityIndicator,
   Modal,
   ScrollView,
-  Platform,
 } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import * as Print from "expo-print";
-import * as Sharing from "expo-sharing";
 
 import { AppHeader } from "@/src/components/AppHeader";
 import { Button, Card, StateBlock } from "@/src/components/ui";
 import { QuoteModal } from "@/src/components/QuoteModal";
+import { PdfPreviewModal } from "@/src/components/PdfPreviewModal";
 import { useAuth } from "@/src/context/AuthContext";
 import { useChannel } from "@/src/context/ChannelContext";
 import { buildListHTML } from "@/src/utils/listpdf";
@@ -35,6 +33,8 @@ export default function Home() {
   const [quoteOpen, setQuoteOpen] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [exportMsg, setExportMsg] = useState<string | null>(null);
+  const [previewHtml, setPreviewHtml] = useState<string | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<ProductSuggestion[]>([]);
@@ -147,11 +147,11 @@ export default function Home() {
     }
     setDownloading(true);
     try {
-      const res = await api.exportList({ rin: activeRin ?? undefined, marca: activeMarca ?? undefined });
+      // Full catalog for the selected channel — ignore active search / filters.
+      const res = await api.exportList({});
       const html = buildListHTML(current.label, res.products, keys);
-      const { uri } = await Print.printToFileAsync({ html });
-      if (Platform.OS === "web") window.open(uri, "_blank");
-      else if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(uri, { mimeType: "application/pdf", dialogTitle: "Lista de precios VENEGE" });
+      setPreviewHtml(html);
+      setPreviewOpen(true);
     } catch {
       setExportMsg("No pudimos generar la lista.");
       setTimeout(() => setExportMsg(null), 2600);
@@ -455,6 +455,14 @@ export default function Home() {
         sellerName={user?.name ?? ""}
         allowedKeys={keys}
       />
+
+      <PdfPreviewModal
+        visible={previewOpen}
+        onClose={() => setPreviewOpen(false)}
+        title="Lista de precios"
+        html={previewHtml}
+        dialogTitle="Lista de precios VENEGE"
+      />
     </View>
   );
 }
@@ -464,9 +472,9 @@ const styles = StyleSheet.create({
   scroll: { paddingHorizontal: spacing.lg, paddingTop: spacing.xl },
   content: { width: "100%", maxWidth: CONTENT_WIDTH, alignSelf: "center" },
   hero: { fontFamily: fonts.display, fontSize: type.xxxl, color: colors.onSurface, letterSpacing: 0.5 },
-  heroSub: { fontFamily: fonts.body, fontSize: type.base, color: colors.onSurfaceTertiary, marginTop: 2, marginBottom: spacing.lg },
+  heroSub: { fontFamily: fonts.body, fontSize: type.sm, color: colors.onSurfaceTertiary, marginTop: 2, marginBottom: spacing.lg },
   updatedRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: -spacing.sm, marginBottom: spacing.lg },
-  updatedText: { fontFamily: fonts.body, fontSize: type.sm, color: colors.onSurfaceTertiary },
+  updatedText: { fontFamily: fonts.body, fontSize: 11, color: colors.onSurfaceTertiary },
   clearFilters: { flexDirection: "row", alignItems: "center", gap: 4, alignSelf: "flex-start", marginTop: spacing.md, paddingVertical: 6, paddingHorizontal: spacing.md, borderRadius: radius.pill, backgroundColor: colors.brandTertiary },
   clearFiltersText: { fontFamily: fonts.body, fontSize: type.sm, color: colors.onBrandTertiary, fontWeight: "700" },
   searchBar: {

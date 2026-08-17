@@ -1,12 +1,11 @@
 import { useEffect, useState } from "react";
-import { View, Text, StyleSheet, Modal, Pressable, TextInput, ScrollView, Platform } from "react-native";
+import { View, Text, StyleSheet, Modal, Pressable, TextInput, ScrollView } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { Ionicons } from "@expo/vector-icons";
-import * as Print from "expo-print";
-import * as Sharing from "expo-sharing";
 
 import { Button } from "@/src/components/ui";
+import { PdfPreviewModal } from "@/src/components/PdfPreviewModal";
 import { api, ProductDetail, PriceTile, ProductSuggestion } from "@/src/api/client";
 import { buildQuoteHTML, QuoteItem } from "@/src/utils/quote";
 import { formatPrice, isAvailable } from "@/src/utils/format";
@@ -48,6 +47,8 @@ export function QuoteModal({
   const [busy, setBusy] = useState(false);
   const [q, setQ] = useState("");
   const [sugg, setSugg] = useState<ProductSuggestion[]>([]);
+  const [previewHtml, setPreviewHtml] = useState<string | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   useEffect(() => {
     if (visible) {
@@ -117,12 +118,8 @@ export function QuoteModal({
         };
       });
       const html = buildQuoteHTML({ recipient, sellerName, sellerPhone: phone, items: quoteItems });
-      const { uri } = await Print.printToFileAsync({ html });
-      if (Platform.OS === "web") {
-        window.open(uri, "_blank");
-      } else if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(uri, { mimeType: "application/pdf", dialogTitle: "Cotización VENEGE" });
-      }
+      setPreviewHtml(html);
+      setPreviewOpen(true);
     } catch {
       /* silent */
     } finally {
@@ -131,6 +128,7 @@ export function QuoteModal({
   };
 
   return (
+    <>
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.backdrop}>
         <View style={[styles.sheet, { paddingBottom: insets.bottom + spacing.md }]} testID="quote-modal">
@@ -232,6 +230,15 @@ export function QuoteModal({
         </View>
       </View>
     </Modal>
+
+    <PdfPreviewModal
+      visible={previewOpen}
+      onClose={() => setPreviewOpen(false)}
+      title="Cotización"
+      html={previewHtml}
+      dialogTitle="Cotización VENEGE"
+    />
+    </>
   );
 }
 

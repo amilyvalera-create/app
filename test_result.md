@@ -101,3 +101,59 @@
 #====================================================================================================
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
+user_problem_statement: "Phase 1 refinements for Lista de Precios VENEGE: (1) 'Descargar lista' must export the ENTIRE valid catalog for the selected channel, ignoring active search/filters. (2) Add a PDF preview screen before download/share, for BOTH the list and the quote. (3) Redesign the PDF (list & quote) to a premium white background with dark text, subtle VENEGE red accents, horizontal color logo header, repeating table headers and 'Página X de Y' footer, NO costs. (4) Reduce secondary UI text size."
+
+backend:
+  - task: "GET /api/products/export returns full catalog + RBAC (no cost leak)"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Backend export endpoint UNCHANGED. Frontend now calls it WITHOUT rin/marca so the full channel catalog is returned. Regression check only: endpoint requires auth, returns {products,count}, prices contain only role-authorized selling columns (+BF_GOODRICH), NEVER cost keys for any role incl. master."
+
+frontend:
+  - task: "Descargar lista exports full catalog + opens premium PDF preview"
+    implemented: true
+    working: "NA"
+    file: "frontend/app/(app)/home.tsx, frontend/src/utils/listpdf.ts, frontend/src/components/PdfPreviewModal.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Download list now calls api.exportList({}) (no filters) => full channel catalog; builds premium white/red PDF HTML with color logo header; opens PdfPreviewModal (WebView/iframe) with a Compartir/Descargar button. Gerencia must pick a channel (not 'Todos'). Verified visually: header + 418 productos render."
+  - task: "Cotizar generates quote and opens PDF preview"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/components/QuoteModal.tsx, frontend/src/utils/quote.ts"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Generate quote now opens PdfPreviewModal with the redesigned premium quote PDF instead of printing directly."
+
+metadata:
+  created_by: "main_agent"
+  version: "1.1"
+  test_sequence: 1
+
+test_plan:
+  current_focus:
+    - "GET /api/products/export returns full catalog + RBAC (no cost leak)"
+    - "Descargar lista exports full catalog + opens premium PDF preview"
+    - "Cotizar generates quote and opens PDF preview"
+  stuck_tasks: []
+  test_all: false
+  test_priority: "high_first"
+
+agent_communication:
+    -agent: "main"
+    -message: "Implemented Phase 1 refinements. Backend export endpoint is UNCHANGED (regression check only). Please verify: (a) /api/products/export requires auth, returns full catalog, and NEVER leaks cost columns for any role; (b) frontend: after login (Roilan Narváez / ventasccs202601), selecting Caracas channel and tapping 'Descargar lista' opens the PDF preview modal (testID pdf-preview-modal) showing the full catalog; (c) Cotizar -> add item -> 'Generar cotización PDF' opens the preview modal. Credentials in /app/memory/test_credentials.md."

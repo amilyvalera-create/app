@@ -1,12 +1,16 @@
 import { formatPrice, isAvailable } from "@/src/utils/format";
 import { ProductDetail, PriceTile } from "@/src/api/client";
+import { VENEGE_LOGO_DATA_URI } from "@/src/utils/logo";
 
 function esc(s: string): string {
   return String(s ?? "").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c] as string));
 }
 
 export function buildListHTML(channelLabel: string, products: ProductDetail[], keys: string[]): string {
-  const date = new Date().toLocaleDateString("es-VE", { day: "2-digit", month: "long", year: "numeric" });
+  const now = new Date();
+  const date = now.toLocaleDateString("es-VE", { day: "2-digit", month: "long", year: "numeric" });
+  const time = now.toLocaleTimeString("es-VE", { hour: "2-digit", minute: "2-digit" });
+
   // Columns = the channel's price keys (in schema order as returned per product).
   const sample = products.find((p) => p.prices.length);
   const cols: PriceTile[] = (sample?.prices ?? []).filter((p) => keys.includes(p.key));
@@ -19,8 +23,9 @@ export function buildListHTML(channelLabel: string, products: ProductDetail[], k
       const cells = cols
         .map((c) => {
           const pt = byKey[c.key];
-          const txt = pt && isAvailable(pt.value) ? formatPrice(pt.value, pt.currency) : "No disponible";
-          return `<td class="r">${esc(txt)}</td>`;
+          const ok = pt && isAvailable(pt.value);
+          const txt = ok ? formatPrice(pt.value, pt.currency) : "No disp.";
+          return `<td class="r${ok ? "" : " na"}">${esc(txt)}</td>`;
         })
         .join("");
       return `<tr><td class="mk">${esc(p.marca)}</td><td class="ds">${esc(p.descripcion)}</td>${cells}</tr>`;
@@ -29,37 +34,53 @@ export function buildListHTML(channelLabel: string, products: ProductDetail[], k
 
   return `<!doctype html><html><head><meta charset="utf-8"/>
   <style>
-    @page { margin: 28px; }
-    * { box-sizing: border-box; }
-    body { font-family: -apple-system, Helvetica, Arial, sans-serif; color:#17181F; margin:0; }
-    .head { display:flex; align-items:center; justify-content:space-between; border-bottom:3px solid #A32A32; padding-bottom:14px; }
-    .brand { display:flex; align-items:center; gap:12px; }
-    .mark { width:38px; height:38px; }
-    .wm { font-size:26px; font-weight:800; letter-spacing:2px; color:#A32A32; }
-    .kicker { font-size:9px; letter-spacing:3px; color:#E0552F; font-weight:700; text-transform:uppercase; }
-    .meta { text-align:right; font-size:11px; color:#555; }
-    .chip { display:inline-block; margin-top:4px; background:#F4F1F1; color:#A32A32; font-weight:700; font-size:11px; padding:3px 10px; border-radius:20px; }
-    table { width:100%; border-collapse:collapse; font-size:11px; margin-top:16px; }
+    @page {
+      margin: 30px 26px 46px;
+      @bottom-center { content: "Página " counter(page) " de " counter(pages); font-size: 8.5px; color: #B0B0B0; }
+    }
+    * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    html, body { margin: 0; padding: 0; background: #FFFFFF; }
+    body { font-family: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; color: #1A1A1F; padding: 22px; }
+
+    .page-header {
+      display: flex; align-items: center; justify-content: space-between;
+      border-bottom: 2.5px solid #C0392B; padding-bottom: 14px; margin-bottom: 18px;
+    }
+    .logo { height: 42px; }
+    .hmeta { text-align: right; }
+    .kicker { font-size: 8.5px; letter-spacing: 3px; color: #C0392B; font-weight: 700; text-transform: uppercase; }
+    .title { font-size: 15px; font-weight: 800; color: #1A1A1F; margin-top: 2px; letter-spacing: .3px; }
+    .chip { display:inline-block; margin-top:6px; background:#FBEDEB; color:#C0392B; font-weight:700; font-size:10px; padding:3px 12px; border-radius:20px; }
+    .date { font-size: 9.5px; color:#888; margin-top:6px; }
+
+    table { width:100%; border-collapse: collapse; font-size: 10px; }
     thead { display: table-header-group; }
-    th { text-align:left; background:#A32A32; color:#fff; padding:8px 6px; font-size:9px; letter-spacing:.5px; text-transform:uppercase; }
-    th.r, td.r { text-align:right; }
-    td { padding:7px 6px; border-bottom:1px solid #ECECEC; }
-    tr:nth-child(even) td { background:#FAF8F8; }
-    .mk { font-weight:700; white-space:nowrap; }
-    .ds { color:#444; }
-    .foot { margin-top:18px; font-size:9.5px; color:#999; }
+    th { text-align:left; background:#C0392B; color:#FFFFFF; padding:7px 6px; font-size:8.5px; letter-spacing:.4px; text-transform:uppercase; font-weight:700; }
+    th.r, td.r { text-align:right; white-space:nowrap; }
+    td { padding:6px; border-bottom:1px solid #EFEFEF; }
+    tr:nth-child(even) td { background:#FBF9F9; }
+    tr { page-break-inside: avoid; }
+    .mk { font-weight:700; white-space:nowrap; color:#1A1A1F; }
+    .ds { color:#4A4A50; }
+    td.na { color:#C0C0C6; font-style: italic; }
+    .foot { margin-top: 20px; padding-top: 10px; border-top: 1px solid #EEE; font-size: 8.5px; color:#AAAAAA; display:flex; justify-content:space-between; }
   </style></head><body>
-    <div class="head">
-      <div class="brand">
-        <svg class="mark" viewBox="0 0 100 100"><path d="M20 20 C20 55 40 80 50 85 C48 60 34 40 32 22 Z" fill="#A32A32"/><path d="M52 84 C60 55 72 35 88 20 L80 16 L92 12 L90 26 L84 22 C70 40 58 60 60 84 Z" fill="#E0552F"/></svg>
-        <div><div class="kicker">Lista de Precios</div><div class="wm">VENEGE</div></div>
+    <div class="page-header">
+      <img class="logo" src="${VENEGE_LOGO_DATA_URI}" alt="VENEGE"/>
+      <div class="hmeta">
+        <div class="kicker">Lista de Precios</div>
+        <div class="title">Catálogo autorizado</div>
+        <div class="chip">${esc(channelLabel)}</div>
+        <div class="date">${esc(date)} · ${esc(time)} · ${products.length} productos</div>
       </div>
-      <div class="meta">${esc(date)}<div class="chip">${esc(channelLabel)}</div></div>
     </div>
     <table>
       <thead><tr><th>Marca</th><th>Descripción</th>${colHead}</tr></thead>
       <tbody>${rows}</tbody>
     </table>
-    <div class="foot">VENEGE · Lista de precios (${esc(channelLabel)}) · ${esc(date)}. Precios sujetos a cambio sin previo aviso.</div>
+    <div class="foot">
+      <span>VENEGE · Neumáticos y suspensiones</span>
+      <span>Precios sujetos a cambio sin previo aviso</span>
+    </div>
   </body></html>`;
 }

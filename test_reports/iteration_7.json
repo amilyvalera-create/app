@@ -1,0 +1,38 @@
+{
+  "summary": "Iteration 7 (PDF Preview modal for BOTH list and quote + full-catalog export ignoring filters + premium white/red PDF redesign) fully verified. Backend regression: 64/65 pytest pass (1 flaky test `test_bf_goodrich_present_for_every_role` failed once due to a live Zoho re-sync race — passes cleanly when rerun in isolation and is guarded elsewhere by `if r.status_code != 200: continue`; NOT a regression of the current iteration and the export endpoint suite (15/15) is 100% green). GET /api/products/export still requires bearer (401 without), returns {products,count} with count=418, prices arrays NEVER contain any cost keys (COSTO/COSTO_BS/COSTO_DOLAR/COSTO_ZELLE) for ANY role including master; non-master roles only see their authorized selling columns + BF_GOODRICH. Frontend E2E on 390x844 mobile viewport verified: (1) Roilan Narváez / ventasccs202601 login → Caracas chip active → tapping `download-list` opens `pdf-preview-modal` with the redesigned WHITE background PDF (red C0392B accents, VENEGE color logo in header, kicker 'LISTA DE PRECIOS', title 'Catálogo autorizado', chip 'Caracas', date+time+'418 productos' meta line) rendering the FULL catalog (418 tbody rows) — pdf-preview-share ('Descargar / Abrir PDF' on web) and pdf-preview-close both visible; closing dismisses the modal. (2) With search-input filled ('michelin') the export STILL produces 418 rows (search/filters ignored by 'Descargar lista' as required). (3) Home 'Cotizar' (home-cotizar) opens QuoteModal → quote-add-search 'michelin' → suggestions surface as `quote-sugg-<sku>` → tapping adds a quote-item-<sku> → 'Generar cotización PDF' (quote-generate) opens pdf-preview-modal with the redesigned quote PDF (kicker 'Cotización', htitle 'Cotización de productos', red header bar, logo, itemized table with totals in $) and both share/close visible. (4) Gerencia venege / Master2026gerencia with 'Todos' active → tapping 'Descargar lista' shows testID `export-msg` exactly 'Selecciona un canal para descargar la lista.' and does NOT open the preview; after tapping channel-caracas the preview opens with 418 rows. All required testIDs are present (pdf-preview-modal, pdf-preview-share, pdf-preview-close, download-list, home-cotizar, quote-modal, quote-add-search, quote-sugg-<sku>, quote-item-<sku>, quote-generate, export-msg, channel-all, channel-caracas). No deprecated Expo packages detected (no expo-av / expo-barcode-scanner / expo-background-fetch); expo-print + expo-sharing used correctly with WebView (native) / iframe srcDoc (web) preview per Platform.OS. All UI copy is in Spanish. Costs remain hidden everywhere.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/products/{sku}", "issue": "test_venege_api.py::test_bf_goodrich_present_for_every_role is flaky under parallel-worker + live Zoho re-sync (KeyError 'prices' when the SKU rotates during the test). Passes when rerun in isolation. Sibling test_master_never_sees_costs already guards with 'if r.status_code != 200: continue' — apply the same guard here for stability. Pre-existing, not introduced by iteration 7."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/conftest.py",
+    "/app/backend/tests/test_venege_api.py",
+    "/app/backend/tests/test_export_endpoint.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "(Optional, low priority) Harden test_bf_goodrich_present_for_every_role with the same 'skip if 404 during live re-sync' guard used by test_master_never_sees_costs to eliminate the pre-existing flake."
+  ],
+  "critical_code_review_comments": [
+    "home.tsx `downloadList()` correctly calls `api.exportList({})` with NO filter args, guaranteeing the FULL authorized catalog is exported regardless of any active search query, RIN or MARCA filters — matches the Phase-1 requirement.",
+    "home.tsx Gerencia gating: when `isAll` (Todos) is active, downloadList short-circuits with `setExportMsg('Selecciona un canal para descargar la lista.')` and does NOT call the export API — verified by E2E.",
+    "PdfPreviewModal.tsx uses `react-native-webview` on native and a web-only `<iframe srcDoc={html}>` on web (Platform.OS branch) — the correct pattern; testIDs pdf-preview-modal / pdf-preview-share / pdf-preview-close all wired. `share()` uses expo-print printToFileAsync + expo-sharing (native) or window.open (web) — no PDF bytes leaked.",
+    "listpdf.ts / quote.ts produce the premium white/red PDF exactly as specified: 2.5px #C0392B header rule, white background, VENEGE logo via data URI, upper-case kicker + red chip on the list, itemized table with per-currency totals in $ on the quote. All strings are HTML-escaped via `esc()`.",
+    "Backend `/api/products/export` intentionally still accepts optional rin/marca query params — per the agent-to-agent note, the full-catalog behavior is achieved by the FRONTEND not sending them; NOT flagged as a bug.",
+    "quote.ts line 37: minor cosmetic — the SKU/RIN meta line renders as `SKU 003718 · RIN R15\"` (extra closing quote after the escaped RIN value). Not blocking; consider dropping the trailing `\"` since it is already inside a labeled span."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "98.5% (64/65; 1 pre-existing flake unrelated to iteration 7 — export suite 15/15 green)", "frontend": "100% (all iteration-7 flows: list preview + full catalog + filter-ignore + quote preview + Gerencia Todos gating)"},
+  "seed_data_creation": "None. Used 6 pre-seeded users + live Zoho-synced catalog (418 products).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 7 fully green. To rerun: cd /app/backend/tests && EXPO_PUBLIC_BACKEND_URL=$(grep EXPO_PUBLIC_BACKEND_URL /app/frontend/.env | cut -d= -f2) python -m pytest -v --junitxml=/app/test_reports/pytest/pytest_results.xml (~1.5min including live Zoho sync). Frontend E2E on 390x844: search-input has testID='search-input' (not 'home-search'); quote suggestion testIDs use pattern 'quote-sugg-<sku>' (not 'quote-suggestion-<sku>'); pdf-preview-modal uses iframe srcDoc on web so read row count via `for f in page.frames: f.evaluate(...)`. Fallback logout on web: localStorage.clear() + reload — profile/logout testIDs not exposed at the Home level yet."
+}
