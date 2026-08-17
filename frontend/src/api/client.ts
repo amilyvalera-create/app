@@ -97,6 +97,12 @@ export const api = {
     );
   },
   facets: () => request<{ rins: (number | string)[]; marcas: string[] }>("/products/facets"),
+  exportList: (opts?: { rin?: string | number; marca?: string }) => {
+    const params = new URLSearchParams();
+    if (opts?.rin !== undefined && opts.rin !== "") params.set("rin", String(opts.rin));
+    if (opts?.marca) params.set("marca", opts.marca);
+    return request<{ products: ProductDetail[]; count: number }>(`/products/export?${params.toString()}`);
+  },
   product: (sku: string) => request<ProductDetail>(`/products/${encodeURIComponent(sku)}`),
   history: () => request<{ items: HistoryItem[] }>("/history"),
   logHistory: (p: { sku: string; marca: string; descripcion: string }) =>

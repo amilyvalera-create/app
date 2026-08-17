@@ -284,6 +284,30 @@ async def product_facets(user: CurrentUser = Depends(get_current_user)):
     return {"rins": rins, "marcas": marcas}
 
 
+@api_router.get("/products/export")
+async def export_products(
+    rin: Optional[str] = None,
+    marca: Optional[str] = None,
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Bulk list for 'Descargar lista' — authorized prices only, honoring filters."""
+    nmarca = normalize(marca) if marca else None
+    docs = await db.products.find({}, {"_id": 0}).to_list(5000)
+    matched = docs
+    if rin:
+        matched = [d for d in matched if str(d.get("rin")) == str(rin)]
+    if nmarca:
+        matched = [d for d in matched if normalize(d.get("marca", "")) == nmarca]
+    rows = [{
+        "sku": d["sku"],
+        "rin": d["rin"],
+        "marca": d["marca"],
+        "descripcion": d["descripcion"],
+        "prices": build_price_payload(d, user.role),
+    } for d in matched]
+    return {"products": rows, "count": len(rows)}
+
+
 @api_router.get("/products/{sku}")
 async def get_product(sku: str, user: CurrentUser = Depends(get_current_user)):
     product = await db.products.find_one({"sku": sku}, {"_id": 0})

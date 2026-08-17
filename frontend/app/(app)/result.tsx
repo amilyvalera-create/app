@@ -19,6 +19,7 @@ import { AppHeader } from "@/src/components/AppHeader";
 import { Button, StateBlock } from "@/src/components/ui";
 import { QuoteModal } from "@/src/components/QuoteModal";
 import { useAuth } from "@/src/context/AuthContext";
+import { useChannel } from "@/src/context/ChannelContext";
 import { api, ProductDetail } from "@/src/api/client";
 import { formatPrice, isAvailable } from "@/src/utils/format";
 import { colors, spacing, radius, fonts, type, CONTENT_WIDTH } from "@/src/theme/tokens";
@@ -36,6 +37,8 @@ export default function Result() {
   const [copied, setCopied] = useState<string | null>(null);
   const [quoteOpen, setQuoteOpen] = useState(false);
   const { user } = useAuth();
+  const { keys, isAll } = useChannel();
+  const visiblePrices = product ? (isAll ? product.prices : product.prices.filter((p) => keys.includes(p.key))) : [];
 
   const copyPrice = async (label: string, value: number, currency: string) => {
     try {
@@ -176,10 +179,10 @@ export default function Result() {
 
               <View style={styles.priceHeader}>
                 <Text style={styles.priceHeaderTitle}>Precios autorizados</Text>
-                <Text style={styles.priceHeaderCount}>{product.prices.length}</Text>
+                <Text style={styles.priceHeaderCount}>{visiblePrices.length}</Text>
               </View>
 
-              {product.prices.length === 0 ? (
+              {visiblePrices.length === 0 ? (
                 <StateBlock
                   icon="lock-closed-outline"
                   title="Sin precios autorizados"
@@ -188,7 +191,7 @@ export default function Result() {
                 />
               ) : (
                 <View style={styles.priceGrid}>
-                  {product.prices.map((p) => {
+                  {visiblePrices.map((p) => {
                     const available = isAvailable(p.value);
                     return (
                       <Pressable
@@ -225,7 +228,7 @@ export default function Result() {
                         )}
                         <Text style={styles.priceCurrency}>
                           {copied === p.label
-                            ? "¡Copiado!"
+                            ? "Copiado"
                             : p.currency === "Bs"
                               ? "Bolívares · toca para copiar"
                               : "Dólares · toca para copiar"}
@@ -255,9 +258,8 @@ export default function Result() {
 
           {/* Copy toast */}
           {copied ? (
-            <View style={[styles.toast, { bottom: insets.bottom + 120 }]} testID="copy-toast">
-              <Ionicons name="checkmark-circle" size={16} color={colors.onSuccess} />
-              <Text style={styles.toastText}>Precio copiado</Text>
+            <View style={[styles.toast, { bottom: insets.bottom + 130 }]} testID="copy-toast">
+              <Text style={styles.toastText}>Copiado</Text>
             </View>
           ) : null}
 
@@ -296,6 +298,7 @@ export default function Result() {
             onClose={() => setQuoteOpen(false)}
             product={product}
             sellerName={user?.name ?? ""}
+            allowedKeys={isAll ? product.prices.map((p) => p.key) : keys}
           />
         </>
       ) : null}
@@ -375,8 +378,8 @@ const styles = StyleSheet.create({
   invLights: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginTop: spacing.md },
   light: { width: 14, height: 14, borderRadius: 7 },
   invHint: { fontFamily: fonts.body, fontSize: type.sm, color: colors.onSurfaceTertiary, marginLeft: spacing.sm, flex: 1 },
-  toast: { position: "absolute", alignSelf: "center", flexDirection: "row", alignItems: "center", gap: spacing.sm, backgroundColor: colors.success, borderRadius: radius.pill, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm },
-  toastText: { fontFamily: fonts.body, fontSize: type.base, color: colors.onSuccess, fontWeight: "700" },
+  toast: { position: "absolute", alignSelf: "center", flexDirection: "row", alignItems: "center", gap: spacing.sm, backgroundColor: "rgba(30,32,41,0.95)", borderRadius: radius.pill, paddingHorizontal: spacing.md, paddingVertical: 6, borderWidth: 1, borderColor: colors.borderStrong },
+  toastText: { fontFamily: fonts.body, fontSize: type.sm, color: colors.onSurface, fontWeight: "600" },
   priceTileTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: spacing.sm },
   priceLabel: { fontFamily: fonts.body, fontSize: type.base, color: colors.onSurfaceSecondary, fontWeight: "600", flex: 1, marginRight: spacing.sm },
   posBadge: { backgroundColor: colors.surfaceTertiary, borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: 3 },

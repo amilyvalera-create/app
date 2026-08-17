@@ -48,6 +48,19 @@ All user-facing text in Spanish.
 - UX: quick filters (RIN + MARCA chip rows), per-user favorites (pin/unpin), WhatsApp
   share quotation with VENEGE branding, refined transparent logo mark (no box).
 
+## CHANNEL SELECTOR + SALES ACTIONS (2026-08-17)
+- Channel/customer selector above catalog controls visible prices + quote + downloaded list
+  (never mixes channels). Config in `src/utils/channels.ts` + `ChannelContext`. Defaults:
+  Roilan=Caracas|Tires Center (Caracas), Adriana=Caracas|Panofre (Caracas), Casanova=Caracas,
+  Manrique=Oriente Sur, Maria Teresa=Oriente Norte, Gerencia=Todos|+5 channels (Todos default).
+- Result prices filtered by channel; QuoteModal item price options limited to channel keys.
+- Discreet "Copiado" toast on price tap.
+- Sales actions: "Cotizar" + "Descargar lista" (no print). New GET /api/products/export
+  (auth, honors rin/marca) → branded VENEGE PDF via `src/utils/listpdf.ts` (MARCA col C +
+  DESCRIPCIÓN col D + only the channel's authorized price columns, no costs, repeating headers).
+  Gerencia must pick a channel (cannot export "Todos").
+- Verified: 65/65 backend + full E2E (iteration_6). No regressions.
+
 ## PHASE 1 REFINEMENTS (2026-08-17)
 - New named users + composite roles (see test_credentials.md): gerencia+Admon (master),
   roilan=caracas_tirescenter, adriana=caracas_panofre, andrea.casanova=caracas,

@@ -8,15 +8,21 @@ import {
   ActivityIndicator,
   Modal,
   ScrollView,
+  Platform,
 } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import * as Print from "expo-print";
+import * as Sharing from "expo-sharing";
 
 import { AppHeader } from "@/src/components/AppHeader";
 import { Button, Card, StateBlock } from "@/src/components/ui";
+import { QuoteModal } from "@/src/components/QuoteModal";
 import { useAuth } from "@/src/context/AuthContext";
+import { useChannel } from "@/src/context/ChannelContext";
+import { buildListHTML } from "@/src/utils/listpdf";
 import { api, ProductSuggestion, HistoryItem } from "@/src/api/client";
 import { formatTimestamp } from "@/src/utils/format";
 import { colors, spacing, radius, fonts, type, CONTENT_WIDTH } from "@/src/theme/tokens";
@@ -25,6 +31,10 @@ export default function Home() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user } = useAuth();
+  const { channels, channelId, setChannelId, current, keys, isAll } = useChannel();
+  const [quoteOpen, setQuoteOpen] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [exportMsg, setExportMsg] = useState<string | null>(null);
 
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<ProductSuggestion[]>([]);
@@ -129,6 +139,27 @@ export default function Home() {
     setResults([]);
   };
 
+  const downloadList = async () => {
+    if (isAll) {
+      setExportMsg("Selecciona un canal para descargar la lista.");
+      setTimeout(() => setExportMsg(null), 2600);
+      return;
+    }
+    setDownloading(true);
+    try {
+      const res = await api.exportList({ rin: activeRin ?? undefined, marca: activeMarca ?? undefined });
+      const html = buildListHTML(current.label, res.products, keys);
+      const { uri } = await Print.printToFileAsync({ html });
+      if (Platform.OS === "web") window.open(uri, "_blank");
+      else if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(uri, { mimeType: "application/pdf", dialogTitle: "Lista de precios VENEGE" });
+    } catch {
+      setExportMsg("No pudimos generar la lista.");
+      setTimeout(() => setExportMsg(null), 2600);
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   const renderSuggestion = (r: ProductSuggestion) => (
     <Pressable
       key={r.sku}
@@ -191,6 +222,35 @@ export default function Home() {
               </Pressable>
             ) : null}
           </View>
+
+          {/* Channel / customer selector */}
+          {channels.length > 1 ? (
+            <View style={styles.channelWrap} testID="channel-selector">
+              <Text style={styles.filterLabel}>VISTA / CANAL</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRowContent}>
+                {channels.map((c) => {
+                  const active = channelId === c.id;
+                  return (
+                    <Pressable
+                      key={c.id}
+                      testID={`channel-${c.id}`}
+                      onPress={() => setChannelId(c.id)}
+                      style={[styles.chip, active && styles.chipActive]}
+                    >
+                      <Text style={[styles.chipText, active && styles.chipTextActive]}>{c.label}</Text>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          ) : null}
+
+          {/* Sales actions */}
+          <View style={styles.salesRow}>
+            <Button label="Cotizar" icon="document-text-outline" onPress={() => setQuoteOpen(true)} testID="home-cotizar" style={{ flex: 1 }} />
+            <Button label="Descargar lista" icon="download-outline" variant="outline" onPress={downloadList} loading={downloading} testID="download-list" style={{ flex: 1 }} />
+          </View>
+          {exportMsg ? <Text style={styles.exportMsg} testID="export-msg">{exportMsg}</Text> : null}
 
           {/* Quick filters */}
           {rins.length > 0 ? (
@@ -387,6 +447,14 @@ export default function Home() {
           </Pressable>
         </Pressable>
       </Modal>
+
+      <QuoteModal
+        visible={quoteOpen}
+        onClose={() => setQuoteOpen(false)}
+        product={null}
+        sellerName={user?.name ?? ""}
+        allowedKeys={keys}
+      />
     </View>
   );
 }
@@ -414,6 +482,9 @@ const styles = StyleSheet.create({
   },
   searchInput: { flex: 1, color: colors.onSurface, fontFamily: fonts.body, fontSize: type.xl, height: "100%" },
   filterBlock: { marginTop: spacing.lg },
+  channelWrap: { marginTop: spacing.lg },
+  salesRow: { flexDirection: "row", gap: spacing.md, marginTop: spacing.lg },
+  exportMsg: { fontFamily: fonts.body, fontSize: type.sm, color: colors.brandSecondary, marginTop: spacing.sm, fontWeight: "600" },
   filterLabel: { fontFamily: fonts.body, fontSize: type.sm, color: colors.onSurfaceTertiary, letterSpacing: 2, fontWeight: "700", marginBottom: spacing.sm },
   chipRowContent: { gap: spacing.sm, paddingRight: spacing.lg },
   chip: {

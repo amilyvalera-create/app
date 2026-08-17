@@ -1,0 +1,34 @@
+{
+  "summary": "Iteration 6 (channel/customer view + Cotizar/Descargar lista + discreet Copiado toast + Gerencia 'Todos' export gating) fully verified. Backend pytest 65/65 pass (50 regression + 15 new export-endpoint tests). Frontend E2E on mobile viewport (390x844) confirmed: (1) NEW GET /api/products/export requires bearer (401 without), honors ?rin= and ?marca= filters, returns per-product { sku, rin, marca, descripcion, prices:[{key,column,label,currency,position,value}] } with authorized selling columns only + BF_GOODRICH; ZERO cost keys (COSTO/COSTO_BS/COSTO_DOLAR/COSTO_ZELLE) for ANY role including master; Roilan sees only CARACAS_* + TCC_TTC_* + BF (no Panofre/OSur/ONorte/Otros); Andrea Manrique sees only ORIENTE_SUR_* + BF; unknown marca -> count 0; combined rin+marca filter narrows correctly. (2) Roilan Narváez frontend: channel-selector visible with 'Caracas' (default) + 'Tires Center' chips; opening a product with Caracas selected renders only ['CARACAS_BS','CARACAS_CASH','CARACAS_ZELLE','BF_GOODRICH']; switching to Tires Center and reopening renders only ['TCC_TTC_BS','TCC_TTC_CASH','TCC_TTC_ZELLE','BF_GOODRICH'] — channels NEVER mixed. (3) Discreet copy feedback: tapping a price-tile shows testID='copy-toast' with exact text 'Copiado' (verified in DOM). (4) Gerencia venege: chips include channel-all (default), channel-caracas, channel-tires, channel-panofre, channel-osur, channel-onorte; tapping 'Descargar lista' while 'Todos' active does NOT export and shows testID='export-msg' with 'Selecciona un canal para descargar la lista.'; after selecting 'Caracas' the message clears and the export proceeds (PDF generation triggered via expo-print/blob). (5) Home 'Cotizar' opens QuoteModal (testID=quote-modal) without preselected product and shows the quote-add-search input. All 6 EXACT logins still succeed. Zoho dashboard unchanged: source='zoho:Precios Actual', connection_ready=true, ~418 products, last_error=null, worksheet='Precios Actual', table='_202606_Precios'. Costs remain hidden everywhere. No deprecated Expo packages detected (no expo-av / expo-barcode-scanner / expo-background-fetch).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/conftest.py",
+    "/app/backend/tests/test_venege_api.py",
+    "/app/backend/tests/test_export_endpoint.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py GET /api/products/export reuses build_price_payload(product, user.role) so server-side role isolation is preserved; server never trusts client-selected channel — the frontend view narrows an already-authorized set.",
+    "server.py export filters mirror /products/search (rin exact match, marca normalized case+accent insensitive) — behavior is consistent across endpoints.",
+    "frontend src/utils/channels.ts strictly enumerates per-channel keys and appends BF_GOODRICH via a helper — no cost keys can be added by accident; master gets an additional 'Todos' channel with the aggregated ALL list.",
+    "frontend src/context/ChannelContext.tsx resets channelId to channels[0] whenever role changes — no cross-user leakage after logout/login.",
+    "home.tsx enforces Gerencia gating client-side: when isAll (Todos) is active, 'Descargar lista' short-circuits and sets exportMsg (testID='export-msg') instead of calling the export API — matches the spec.",
+    "result.tsx renders a testID='copy-toast' 'Copiado' pill on price tile tap and copies the numeric value — hint text 'toca para copiar' present.",
+    "All new interactive elements (channel chips, cotizar/download buttons, copy toast, export message, quote modal fields) expose testID attributes for reliable E2E testing."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_export_endpoint.py (NEW: 15 test cases covering auth, shape, per-role authorized columns, cost-leak prevention, rin/marca/combined filters, empty result for unknown marca — all pass)"
+  ],
+  "success_rate": {"backend": "100% (65/65)", "frontend": "100% (channel isolation, Copiado toast, Gerencia 'Todos' gating, PDF export trigger, Home Cotizar modal all verified)"},
+  "seed_data_creation": "None. Used 6 pre-seeded users + live Zoho-synced products.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 6 is fully green. New /api/products/export endpoint + channel view + Copiado toast + Gerencia export gating all working. To rerun: cd /app/backend/tests && EXPO_PUBLIC_BACKEND_URL=$(grep EXPO_PUBLIC_BACKEND_URL /app/frontend/.env | cut -d= -f2) python -m pytest -v --junitxml=/app/test_reports/pytest/pytest_results.xml (~1.5min including live Zoho sync). Frontend E2E: use mobile viewport 390x844, login via [data-testid=\"username-input\"|\"password-input\"|\"login-submit-button\"]; channel chips use testID='channel-<id>' (all, caracas, tires, panofre, osur, onorte); export-msg + copy-toast + download-list + home-cotizar + quote-modal + price-tile-<KEY> all have testIDs. On web, expo-print opens the PDF via blob URL — playwright popup event may not always fire but export-msg clearing + no error is a reliable success signal."
+}

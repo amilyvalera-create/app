@@ -22,8 +22,8 @@ type LineItem = {
   qty: number;
 };
 
-function toLine(p: ProductDetail): LineItem | null {
-  const avail = p.prices.filter((x) => isAvailable(x.value));
+function toLine(p: ProductDetail, keys: string[]): LineItem | null {
+  const avail = p.prices.filter((x) => isAvailable(x.value) && keys.includes(x.key));
   if (avail.length === 0) return null;
   return { sku: p.sku, marca: p.marca, descripcion: p.descripcion, rin: p.rin, prices: avail, selected: avail[0].key, qty: 1 };
 }
@@ -33,11 +33,13 @@ export function QuoteModal({
   onClose,
   product,
   sellerName,
+  allowedKeys,
 }: {
   visible: boolean;
   onClose: () => void;
   product: ProductDetail | null;
   sellerName: string;
+  allowedKeys: string[];
 }) {
   const insets = useSafeAreaInsets();
   const [recipient, setRecipient] = useState("");
@@ -48,15 +50,15 @@ export function QuoteModal({
   const [sugg, setSugg] = useState<ProductSuggestion[]>([]);
 
   useEffect(() => {
-    if (visible && product) {
-      const li = toLine(product);
+    if (visible) {
+      const li = product ? toLine(product, allowedKeys) : null;
       setItems(li ? [li] : []);
       setRecipient("");
       setPhone("");
       setQ("");
       setSugg([]);
     }
-  }, [visible, product]);
+  }, [visible, product, allowedKeys]);
 
   useEffect(() => {
     if (q.trim().length < 2) {
@@ -82,7 +84,7 @@ export function QuoteModal({
     }
     try {
       const p = await api.product(sku);
-      const li = toLine(p);
+      const li = toLine(p, allowedKeys);
       if (li) setItems((prev) => [...prev, li]);
     } catch {
       /* ignore */

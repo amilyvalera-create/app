@@ -9,6 +9,7 @@ import { KeyboardProvider } from "react-native-keyboard-controller";
 
 import { useIconFonts } from "@/src/hooks/use-icon-fonts";
 import { AuthProvider, useAuth } from "@/src/context/AuthContext";
+import { ChannelProvider } from "@/src/context/ChannelContext";
 import { colors } from "@/src/theme/tokens";
 
 // Disable logbox errors etc so that users can see the app
@@ -61,7 +62,9 @@ export default function RootLayout() {
         <View style={{ flex: 1, backgroundColor: colors.surface }}>
           <StatusBar style="light" />
           <AuthProvider>
-            <RootNavigator />
+            <ChannelProvider>
+              <RootNavigator />
+            </ChannelProvider>
           </AuthProvider>
         </View>
       </KeyboardProvider>
