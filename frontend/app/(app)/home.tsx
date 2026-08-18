@@ -20,9 +20,9 @@ import { QuoteModal } from "@/src/components/QuoteModal";
 import { PdfPreviewModal } from "@/src/components/PdfPreviewModal";
 import { useAuth } from "@/src/context/AuthContext";
 import { useChannel } from "@/src/context/ChannelContext";
-import { buildListHTML } from "@/src/utils/listpdf";
+import { buildCatalogGeneratorHTML } from "@/src/utils/catalogPdf";
 import { api, ProductSuggestion, HistoryItem } from "@/src/api/client";
-import { formatTimestamp } from "@/src/utils/format";
+import { formatTimestamp, formatPrice, isAvailable } from "@/src/utils/format";
 import { colors, spacing, radius, fonts, type, CONTENT_WIDTH } from "@/src/theme/tokens";
 
 export default function Home() {
@@ -151,7 +151,47 @@ export default function Home() {
       // BF Goodrich is intentionally excluded from list/catalog PDFs.
       const res = await api.exportList({});
       const listKeys = keys.filter((k) => k !== "BF_GOODRICH");
-      const html = buildListHTML(current.label, res.products, listKeys);
+      const sample = res.products.find((p) => p.prices && p.prices.length);
+      const cols = (sample?.prices ?? []).filter((p) => listKeys.includes(p.key)).slice(0, 3);
+      const headers = ["MARCA", "DESCRIPCIÓN", ...cols.map((c) => c.label)];
+
+      const sorted = [...res.products].sort((a, b) => {
+        const m = String(a.marca).localeCompare(String(b.marca), "es");
+        if (m) return m;
+        const ra = Number(a.rin), rb = Number(b.rin);
+        if (!isNaN(ra) && !isNaN(rb) && ra !== rb) return ra - rb;
+        const rr = String(a.rin).localeCompare(String(b.rin), "es");
+        if (rr) return rr;
+        return String(a.descripcion).localeCompare(String(b.descripcion), "es");
+      });
+
+      const rows = sorted.map((p) => {
+        const byKey: Record<string, (typeof cols)[number]> = {};
+        (p.prices ?? []).forEach((pt) => (byKey[pt.key] = pt));
+        return [
+          String(p.marca),
+          String(p.descripcion),
+          ...cols.map((c) => {
+            const pt = byKey[c.key];
+            return pt && isAvailable(pt.value) ? formatPrice(pt.value, pt.currency) : "No disp.";
+          }),
+        ];
+      });
+
+      const d = new Date();
+      const dateStr =
+        d.toLocaleDateString("es-VE", { day: "2-digit", month: "long", year: "numeric" }) +
+        " · " +
+        d.toLocaleTimeString("es-VE", { hour: "2-digit", minute: "2-digit" });
+
+      const html = buildCatalogGeneratorHTML({
+        channelLabel: current.label,
+        dateStr,
+        count: sorted.length,
+        headers,
+        rows,
+        fileName: "Lista_de_precios_VENEGE.pdf",
+      });
       setPreviewHtml(html);
       setPreviewOpen(true);
     } catch {
@@ -464,6 +504,7 @@ export default function Home() {
         title="Lista de precios"
         html={previewHtml}
         dialogTitle="Lista de precios VENEGE"
+        vector
       />
     </View>
   );

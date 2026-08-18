@@ -5,6 +5,7 @@ import { WebView } from "react-native-webview";
 import { Ionicons } from "@expo/vector-icons";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
+import * as FileSystem from "expo-file-system/legacy";
 
 import { Button } from "@/src/components/ui";
 import { colors, spacing, radius, fonts, type } from "@/src/theme/tokens";
@@ -29,34 +30,69 @@ export function PdfPreviewModal({
   title,
   html,
   dialogTitle,
+  vector = false,
 }: {
   visible: boolean;
   onClose: () => void;
   title: string;
   html: string | null;
   dialogTitle: string;
+  /** When true, the preview HTML self-generates a true vector PDF (jsPDF/autotable). */
+  vector?: boolean;
 }) {
   const insets = useSafeAreaInsets();
   const [busy, setBusy] = useState(false);
   const iframeRef = useRef<any>(null);
+  const webviewRef = useRef<WebView>(null);
+  const base64Resolver = useRef<((v: string) => void) | null>(null);
 
   const fileName = safeFileName(dialogTitle);
 
-  // --- Web helpers: generate a REAL PDF (no browser print dialog) ---
-  const webElement = () => {
-    const doc = iframeRef.current?.contentDocument;
-    return doc?.body ?? null;
-  };
+  // ---------- WEB helpers (html2pdf path — quotes / html mode) ----------
+  const webElement = () => iframeRef.current?.contentDocument?.body ?? null;
 
-  const webBlob = async (): Promise<Blob | null> => {
+  const webBlobHtml2Pdf = async (): Promise<Blob | null> => {
     const el = webElement();
     if (!el) return null;
     const html2pdf = (await import("html2pdf.js")).default;
     return await html2pdf().set(PDF_OPTS(fileName)).from(el).outputPdf("blob");
   };
 
-  const downloadWeb = async () => {
-    const blob = await webBlob();
+  // ---------- WEB helpers (vector path — catalog) ----------
+  const waitWebReady = async () => {
+    for (let i = 0; i < 100; i++) {
+      const w = iframeRef.current?.contentWindow;
+      if (w && w.__ready && typeof w.__download === "function") return w;
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    return null;
+  };
+
+  const downloadWebVector = async () => {
+    const w = await waitWebReady();
+    if (w) w.__download();
+  };
+
+  const shareWebVector = async () => {
+    const w = await waitWebReady();
+    if (!w) return;
+    const blob: Blob = w.__blob();
+    const file = new File([blob], fileName, { type: "application/pdf" });
+    const nav: any = navigator;
+    if (nav.canShare && nav.canShare({ files: [file] })) {
+      try {
+        await nav.share({ files: [file], title: dialogTitle });
+        return;
+      } catch {
+        /* cancelled -> fall through */
+      }
+    }
+    w.__download();
+  };
+
+  // ---------- WEB helpers (html mode direct blob download) ----------
+  const downloadWebHtml = async () => {
+    const blob = await webBlobHtml2Pdf();
     if (!blob) return;
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -68,8 +104,8 @@ export function PdfPreviewModal({
     setTimeout(() => URL.revokeObjectURL(url), 4000);
   };
 
-  const shareWeb = async () => {
-    const blob = await webBlob();
+  const shareWebHtml = async () => {
+    const blob = await webBlobHtml2Pdf();
     if (!blob) return;
     const file = new File([blob], fileName, { type: "application/pdf" });
     const nav: any = navigator;
@@ -78,14 +114,14 @@ export function PdfPreviewModal({
         await nav.share({ files: [file], title: dialogTitle });
         return;
       } catch {
-        /* user cancelled → fall through to download */
+        /* cancelled */
       }
     }
-    await downloadWeb();
+    await downloadWebHtml();
   };
 
-  // --- Native helpers: printToFileAsync writes a real .pdf file (NO dialog) ---
-  const nativeShare = async () => {
+  // ---------- NATIVE helpers ----------
+  const nativeShareHtml = async () => {
     if (!html) return;
     const { uri } = await Print.printToFileAsync({ html });
     if (await Sharing.isAvailableAsync()) {
@@ -95,12 +131,42 @@ export function PdfPreviewModal({
     }
   };
 
+  const nativeGetBase64 = () =>
+    new Promise<string>((resolve, reject) => {
+      base64Resolver.current = resolve;
+      const js = `(function(){function go(){ if(window.__ready){ try{ window.ReactNativeWebView.postMessage('PDF:'+window.__base64()); }catch(e){ window.ReactNativeWebView.postMessage('ERR:'+(e&&e.message)); } } else { setTimeout(go,150);} } go(); })(); true;`;
+      webviewRef.current?.injectJavaScript(js);
+      setTimeout(() => {
+        if (base64Resolver.current) {
+          base64Resolver.current = null;
+          reject(new Error("timeout"));
+        }
+      }, 20000);
+    });
+
+  const nativeSaveVector = async () => {
+    const b64 = await nativeGetBase64();
+    const uri = (FileSystem.cacheDirectory ?? "") + fileName;
+    await FileSystem.writeAsStringAsync(uri, b64, { encoding: FileSystem.EncodingType.Base64 });
+    if (await Sharing.isAvailableAsync()) {
+      await Sharing.shareAsync(uri, { mimeType: "application/pdf", dialogTitle, UTI: "com.adobe.pdf" });
+    } else {
+      Alert.alert("PDF generado", "El PDF se generó pero no hay una app para compartir disponible.");
+    }
+  };
+
+  // ---------- Actions ----------
   const onDownload = async () => {
     if (busy) return;
     setBusy(true);
     try {
-      if (Platform.OS === "web") await downloadWeb();
-      else await nativeShare();
+      if (Platform.OS === "web") {
+        if (vector) await downloadWebVector();
+        else await downloadWebHtml();
+      } else {
+        if (vector) await nativeSaveVector();
+        else await nativeShareHtml();
+      }
     } catch {
       Alert.alert("Error", "No pudimos generar el PDF.");
     } finally {
@@ -112,12 +178,26 @@ export function PdfPreviewModal({
     if (busy) return;
     setBusy(true);
     try {
-      if (Platform.OS === "web") await shareWeb();
-      else await nativeShare();
+      if (Platform.OS === "web") {
+        if (vector) await shareWebVector();
+        else await shareWebHtml();
+      } else {
+        if (vector) await nativeSaveVector();
+        else await nativeShareHtml();
+      }
     } catch {
       /* silent */
     } finally {
       setBusy(false);
+    }
+  };
+
+  const onWebViewMessage = (e: { nativeEvent: { data: string } }) => {
+    const d = e.nativeEvent.data || "";
+    if (d.startsWith("PDF:") && base64Resolver.current) {
+      const r = base64Resolver.current;
+      base64Resolver.current = null;
+      r(d.slice(4));
     }
   };
 
@@ -139,9 +219,14 @@ export function PdfPreviewModal({
               <iframe ref={iframeRef} srcDoc={html} style={{ width: "100%", height: "100%", border: "none", background: "#fff" }} title="preview" />
             ) : (
               <WebView
+                ref={webviewRef}
                 originWhitelist={["*"]}
                 source={{ html }}
                 style={styles.webview}
+                javaScriptEnabled
+                domStorageEnabled
+                mixedContentMode="always"
+                onMessage={onWebViewMessage}
                 startInLoadingState
                 renderLoading={() => (
                   <View style={styles.loading}>
